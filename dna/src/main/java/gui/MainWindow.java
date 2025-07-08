@@ -312,11 +312,35 @@ public class MainWindow extends JFrame {
 		statementsAndCoderPanel.add(coderSelectionPanel, BorderLayout.NORTH);
 		statementsAndCoderPanel.add(getStatementPanel(), BorderLayout.CENTER);
 
-		//Grace edits
-		JPanel SuggestedAnnotatePanel = new Jpanel(new BorderLayout());
-		SuggestedAnnotatePanel.add(menubar, BorderLayout.NORTH);
+		// Create the annotation style dropdown
+		String[] annotationStyles = { "Select Annotation Style", "Naive Bayes", "TF-IDF", "BERT", "Custom Rule-Based" };
+		JComboBox<String> annotationStyleBox = new JComboBox<>(annotationStyles);
 
-		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanel);
+		// Add listener to dropdown (optional)
+		annotationStyleBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String selected = (String) annotationStyleBox.getSelectedItem();
+				if (!selected.equals("Select Annotation Style")) {
+					System.out.println("Selected annotation style: " + selected);
+					// TODO: Add logic to suggest annotations
+					// Example: textPanel.suggestAnnotations(selected);
+				}
+			}
+		});
+
+		// Your original text panel
+		textPanel = new TextPanel();
+
+		// Create a panel that holds both the dropdown and the text panel
+		JPanel textPanelWithControls = new JPanel(new BorderLayout());
+		textPanelWithControls.add(annotationStyleBox, BorderLayout.NORTH);
+		textPanelWithControls.add(textPanel, BorderLayout.CENTER);
+
+		// Replace in the split pane
+		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanelWithControls);
+
+		//JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanel);
 		verticalSplitPane.setOneTouchExpandable(true);
 		JSplitPane rightSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, verticalSplitPane, statementsAndCoderPanel);
 		rightSplitPane.setOneTouchExpandable(true);
