@@ -4,7 +4,7 @@ author:
 bibliography:
 - bibliography.bib
 csl: apa-numeric-superscript-brackets.csl
-date: 2025-06-01
+date: 2025-07-16
 title: "Discourse Network Analysis: Bibliography"
 ---
 
@@ -21,7 +21,7 @@ before contributing any citation entries.
 ------------------------------------------------------------------------
 
 <div id="refs" class="references csl-bib-body hanging-indent"
-line-spacing="2">
+entry-spacing="0" line-spacing="2">
 
 <div id="ref-absi2023hope" class="csl-entry">
 

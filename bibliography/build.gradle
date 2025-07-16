@@ -82,3 +82,23 @@ clean {
         println "Bibliography files have been removed."
     }
 }
+// Custom task to delete temp directory with error handling
+/*tasks.register("cleanTemp") {
+    doLast {
+        def tempDir = file("$projectDir/temp")
+        if (tempDir.exists()) {
+            try {
+                println "Attempting to delete temp directory: ${tempDir}"
+                tempDir.deleteDir()
+            } catch (Exception e) {
+                println "⚠️  Warning: Could not delete temp directory (possibly locked): ${e.message}"
+            }
+        } else {
+            println "Temp directory does not exist, skipping."
+        }
+    }
+}
+
+// Make 'cleanTemp' run before the main 'clean' task
+clean.dependsOn(cleanTemp)
+*/

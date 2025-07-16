@@ -312,11 +312,12 @@ public class MainWindow extends JFrame {
 		statementsAndCoderPanel.add(coderSelectionPanel, BorderLayout.NORTH);
 		statementsAndCoderPanel.add(getStatementPanel(), BorderLayout.CENTER);
 
+		//Grace edits
 		// Create the annotation style dropdown
-		String[] annotationStyles = { "Select Annotation Style", "Naive Bayes", "TF-IDF", "BERT", "Custom Rule-Based" };
+		String[] annotationStyles = { "Select Automatic Annotation Method", "Naive Bayes", "Other Annotation" };
 		JComboBox<String> annotationStyleBox = new JComboBox<>(annotationStyles);
 
-		// Add listener to dropdown (optional)
+		// Add listener to dropdown
 		annotationStyleBox.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -329,16 +330,17 @@ public class MainWindow extends JFrame {
 			}
 		});
 
-		// Your original text panel
 		textPanel = new TextPanel();
 
-		// Create a panel that holds both the dropdown and the text panel
+		// Panel that holds both the dropdown and the text panel
 		JPanel textPanelWithControls = new JPanel(new BorderLayout());
 		textPanelWithControls.add(annotationStyleBox, BorderLayout.NORTH);
 		textPanelWithControls.add(textPanel, BorderLayout.CENTER);
 
 		// Replace in the split pane
 		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanelWithControls);
+		
+		//end of Grace edits
 
 		//JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanel);
 		verticalSplitPane.setOneTouchExpandable(true);

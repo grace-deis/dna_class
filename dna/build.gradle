@@ -82,6 +82,7 @@ dependencies {
     implementation group: 'org.ojalgo', name: 'ojalgo', version: '51.4.1'
     // https://mvnrepository.com/artifact/org.apache.commons/commons-math3
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
+    implementation 'nz.ac.waikato.cms.weka:weka-stable:3.8.6'
 }
 
 // Extend the default clean task to include custom directories and files
