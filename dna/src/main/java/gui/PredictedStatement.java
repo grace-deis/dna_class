@@ -15,8 +15,8 @@ public class PredictedStatement {
         return start;
     }
     
-    public void getStop(int stop){
-        this.stop = stop;
+    public int getStop(){
+        return stop;
     }
 
     public double getConfidence(){

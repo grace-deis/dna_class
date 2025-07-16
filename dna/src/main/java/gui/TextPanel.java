@@ -36,6 +36,7 @@ class TextPanel extends JPanel {
 	private DefaultStyledDocument doc;
 	private StyleContext sc;
 	private int documentId;
+	private ArrayList<PredictedStatement> predictedStatements = new ArrayList<>();
 	
 	/**
 	 * Create a new text panel.
@@ -109,6 +110,10 @@ class TextPanel extends JPanel {
 		});
 	}
 
+	public void setPredictedStatements(ArrayList<PredictedStatement> preds) {
+        this.predictedStatements = preds;
+    }
+	
 	/**
 	 * Set the contents of the text panel, including the document ID and text,
 	 * and paint the statements in the text, then scroll to the top of the text.
@@ -153,7 +158,16 @@ class TextPanel extends JPanel {
 				}
 				doc.setCharacterAttributes(start, statements.get(i).getStop() - start, bgStyle, false);
 			}
-			
+
+			for (PredictedStatement ps : predictedStatements) {
+            	Style predStyle = sc.addStyle("PredictedHighlight", null);
+                StyleConstants.setBackground(predStyle, new Color(255, 255, 0, 128)); // semi-transparent yellow
+                int predStart = ps.getStart();
+                int predLength = ps.getStop() - predStart;
+                if (predStart >= 0 && predStart + predLength <= textWindow.getText().length()) {
+                    doc.setCharacterAttributes(predStart, predLength, predStyle, false);
+                }
+
 			// color regex
 			ArrayList<Regex> regex = Dna.sql.getRegexes();
 			for (i = 0; i < regex.size(); i++) {
@@ -168,6 +182,7 @@ class TextPanel extends JPanel {
 					doc.setCharacterAttributes(start, m.end() - start, fgStyle, false);
 				}
 			}
+		}
 		}
 	}
 	

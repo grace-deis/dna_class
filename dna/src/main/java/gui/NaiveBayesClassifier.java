@@ -2,8 +2,12 @@ package gui;
 import weka.core.*;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 
 import weka.classifiers.bayes.NaiveBayesMultinomialText;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.StringToWordVector;
 
 public class NaiveBayesClassifier {
     private NaiveBayesMultinomialText model;
@@ -50,7 +54,7 @@ public class NaiveBayesClassifier {
 
         Instances vectTest = Filter.useFilter(testFormat, vectorFilter);
         vectTest.setClassIndex(1);
-        for (int i = 0; i < vectTest.seize(); i++) {
+        for (int i = 0; i < vectTest.size(); i++) {
             Instance inst = vectTest.get(i);
             double[] dist = model.distributionForInstance(inst);
             double maxP = -1; int idx = -1;
@@ -65,3 +69,4 @@ public class NaiveBayesClassifier {
         return preds;
     }
 }
+
