@@ -313,24 +313,16 @@ public class MainWindow extends JFrame {
 		statementsAndCoderPanel.add(getStatementPanel(), BorderLayout.CENTER);
 
 		// Create the annotation style dropdown
-		String[] annotationStyles = { "Select Annotation Style", "Naive Bayes", "TF-IDF", "BERT", "Custom Rule-Based" };
+		textPanel = new TextPanel();  // ← instantiate first
+
+		// Create the annotation style dropdown
+		String[] annotationStyles = {
+			"Select Annotation Style",
+			"Naive Bayes"
+		};
 		JComboBox<String> annotationStyleBox = new JComboBox<>(annotationStyles);
 
-		// Add listener to dropdown (optional)
-		annotationStyleBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String selected = (String) annotationStyleBox.getSelectedItem();
-				if (!selected.equals("Select Annotation Style")) {
-					System.out.println("Selected annotation style: " + selected);
-					// TODO: Add logic to suggest annotations
-					// Example: textPanel.suggestAnnotations(selected);
-				}
-			}
-		});
 
-		// Your original text panel
-		textPanel = new TextPanel();
 
 		// Create a panel that holds both the dropdown and the text panel
 		JPanel textPanelWithControls = new JPanel(new BorderLayout());

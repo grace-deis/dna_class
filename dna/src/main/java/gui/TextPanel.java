@@ -5,7 +5,12 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Point;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -17,12 +22,14 @@ import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleContext;
+import javax.swing.text.StyledDocument;
 
 import dna.Dna;
 import logger.LogEvent;
 import logger.Logger;
 import model.Regex;
 import model.Statement;
+import model.NaiveBayesClassifier;
 
 /**
  * Text panel, which displays the text of the selected document and paints the
@@ -33,10 +40,13 @@ class TextPanel extends JPanel {
 	private static final long serialVersionUID = -8094978928012991210L;
 	private JTextPane textWindow;
 	private JScrollPane textScrollPane;
-	private DefaultStyledDocument doc;
 	private StyleContext sc;
+	private DefaultStyledDocument doc;
 	private int documentId;
 	
+	// Add to TextPanel class
+	private Map<SentenceSpan, Map<String, Double>> sentenceProbabilities = new HashMap<>();
+
 	/**
 	 * Create a new text panel.
 	 * @throws Exception 
@@ -65,6 +75,30 @@ class TextPanel extends JPanel {
 		textScrollPane.setPreferredSize(new Dimension(500, 450));
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		this.add(textScrollPane);
+		
+		textWindow.addMouseListener(new java.awt.event.MouseAdapter() {
+		    public void mouseClicked(java.awt.event.MouseEvent evt) {
+		        int pos = textWindow.viewToModel2D(evt.getPoint());
+		        for (Map.Entry<SentenceSpan, Map<String, Double>> entry : sentenceProbabilities.entrySet()) {
+		            if (entry.getKey().contains(pos)) {
+		                Map<String, Double> probs = entry.getValue();
+		                // Sort and get top 3
+		                List<Map.Entry<String, Double>> sorted = new ArrayList<>(probs.entrySet());
+		                sorted.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+		                StringBuilder msg = new StringBuilder("<html><b>Top 3 classes:</b><br>");
+		                for (int i = 0; i < Math.min(3, sorted.size()); i++) {
+		                    msg.append(sorted.get(i).getKey())
+		                       .append(": ")
+		                       .append(String.format("%.1f%%", sorted.get(i).getValue() * 100))
+		                       .append("<br>");
+		                }
+		                msg.append("</html>");
+		                javax.swing.JOptionPane.showMessageDialog(textWindow, msg.toString(), "Class Probabilities", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+		                break;
+		            }
+		        }
+		    }
+		});
 	}
 	
 	/**
@@ -192,5 +226,75 @@ class TextPanel extends JPanel {
 				Dna.logger.log(l);
 			}
 		}
+	}
+	public void highlightHonSentences() {
+		String text = textWindow.getText();
+		Style highlightStyle = sc.addStyle("HonStyle", null);
+		StyleConstants.setBackground(highlightStyle, Color.YELLOW);
+
+		// Clear all styles first
+		Style clearStyle = sc.addStyle("ClearStyle", null);
+		StyleConstants.setBackground(clearStyle, Color.WHITE);
+		doc.setCharacterAttributes(0, text.length(), clearStyle, false);
+
+		Pattern pattern = Pattern.compile("([^.!?]*\\bhon\\b[^.!?]*)", Pattern.CASE_INSENSITIVE);
+		Matcher matcher = pattern.matcher(text);
+		while (matcher.find()) {
+			int start = matcher.start();
+			int length = matcher.end() - start;
+			doc.setCharacterAttributes(start, length, highlightStyle, false);
+		}
+	}
+
+	// Add a new method for Naive Bayes sentence highlighting
+	public void highlightSentencesWithNaiveBayes(Map<String, String> trainingData) {
+		try {
+			// Convert trainingData to Map<String, List<String>>
+			Map<String, List<String>> convertedTrainingData = new HashMap<>();
+			for (Map.Entry<String, String> entry : trainingData.entrySet()) {
+				convertedTrainingData.computeIfAbsent(entry.getValue(), k -> new ArrayList<>()).add(entry.getKey());
+			}
+			// Simple Naive Bayes classifier
+			NaiveBayesClassifier classifier = new NaiveBayesClassifier();
+			classifier.train(convertedTrainingData);
+
+			// Classify each sentence in the current text
+			String text = textWindow.getText();
+			String[] sentences = text.split("(?<=[.!?])\\s+");
+			StyledDocument doc = textWindow.getStyledDocument();
+
+			for (String sentence : sentences) {
+				Map<String, Double> probs = classifier.predictProbs(sentence);
+				// Get top class and its probability
+				String topClass = null;
+				double topProb = 0.0;
+				for (Map.Entry<String, Double> entry : probs.entrySet()) {
+					if (entry.getValue() > topProb) {
+						topProb = entry.getValue();
+						topClass = entry.getKey();
+					}
+				}
+				// Set opacity based on certainty (probability)
+				int alpha = (int) (50 + 205 * topProb); // 50-255 range
+				Color highlightColor = new Color(255, 255, 0, alpha); // yellow with alpha
+				Style sentenceHighlight = textWindow.addStyle("highlight_" + sentence, null);
+				StyleConstants.setBackground(sentenceHighlight, highlightColor);
+
+				int start = text.indexOf(sentence);
+				int end = start + sentence.length();
+				doc.setCharacterAttributes(start, end - start, sentenceHighlight, false);
+
+				// Store for mouse click lookup
+				sentenceProbabilities.put(new SentenceSpan(start, end), probs);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private static class SentenceSpan {
+	    int start, end;
+	    SentenceSpan(int start, int end) { this.start = start; this.end = end; }
+	    public boolean contains(int pos) { return pos >= start && pos <= end; }
 	}
 }
