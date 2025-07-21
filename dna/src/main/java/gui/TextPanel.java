@@ -57,6 +57,8 @@ class TextPanel extends JPanel {
 
 	private JComboBox<String> variableDropdown;
     private JTable annotationTable;
+
+	private java.util.Map<String, Integer> variableMap = new java.util.HashMap<>();
 	
 	/**
 	 * Create a new text panel.
@@ -70,13 +72,7 @@ class TextPanel extends JPanel {
 		// Top panel with the dropdowns and button
 		JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
-		// Annotation method dropdown
-		JLabel methodLabel = new JLabel("Annotation Method:");
-		JComboBox<String> methodDropdown = new JComboBox<>(new String[] { "Naive Bayes", "To Do" });
-		topPanel.add(methodLabel);
-		topPanel.add(methodDropdown);
-
-		 // Variable dropdown, initially disabled until documents are uploaded
+		// Variable dropdown, initially disabled until documents are uploaded
         JLabel variableLabel = new JLabel("Variable:");
 		variableDropdown = new JComboBox<>();
 		variableDropdown.setEnabled(false);
@@ -84,18 +80,29 @@ class TextPanel extends JPanel {
 		topPanel.add(variableDropdown);
 
 		variableDropdown.addActionListener(e -> {
-			String selectedVar = (String) variableDropdown.getSelectedItem();
-			if (selectedVar != null) {
-				loadAnnotations(selectedVar, annotationTable);
-			}
+		String selectedVar = (String) variableDropdown.getSelectedItem();
+		if (selectedVar != null) {
+			loadAnnotations(selectedVar, annotationTable);}
 		});
+
+		JButton refreshButton = new JButton("Refresh Variables");
+		topPanel.add(refreshButton);
+		refreshButton.addActionListener(evt -> {
+			loadVariables(); // reload variables from the database
+		});
+
+		// Annotation method dropdown
+		JLabel methodLabel = new JLabel("Annotation Method:");
+		JComboBox<String> methodDropdown = new JComboBox<>(new String[] { "Naive Bayes", "To Do" });
+		topPanel.add(methodLabel);
+		topPanel.add(methodDropdown);
+
 
 		// Annotate button
 		JButton annotateButton = new JButton("Annotate");
 		topPanel.add(annotateButton);
 		annotateButton.addActionListener(e -> {
-			loadVariables();       // Reload variables from the database
-			openAnnotationWindow(); // Then open the annotation window
+			openAnnotationWindow(); // open the annotation window
 		});
 
 		this.add(topPanel, BorderLayout.NORTH);
@@ -120,8 +127,6 @@ class TextPanel extends JPanel {
 		this.add(textScrollPane, BorderLayout.CENTER);
 
 		this.documentId = -1; // initialize
-
-		loadVariables();
 	}
 
 	private void loadVariables() {
@@ -129,7 +134,7 @@ class TextPanel extends JPanel {
 			@Override
 			protected List<String> doInBackground() {
 				List<String> variableList = new ArrayList<>();
-				String sql = "SELECT DISTINCT Variable FROM VARIABLES";
+				String sql = "SELECT ID, Variable FROM VARIABLES WHERE StatementTypeId = 1 ORDER BY Variable;";
 
 				try (Connection conn = Dna.sql.getDataSource().getConnection();
 					PreparedStatement stmt = conn.prepareStatement(sql);
@@ -137,8 +142,10 @@ class TextPanel extends JPanel {
 
 					while (rs.next()) {
 						String variable = rs.getString("Variable");
+						int id = rs.getInt("ID");
 						if (variable != null && !variable.isEmpty()) {
 							variableList.add(variable);
+							variableMap.put(variable, id); // Store variable ID for later use
 						}
 					}
 				} catch (SQLException e) {
@@ -187,13 +194,18 @@ class TextPanel extends JPanel {
 					subString = "SUBSTRING(DOCUMENTS.Text, CAST(Start + 1 AS INT4), CAST(Stop - Start AS INT4)) AS Text";
 				}
 
+				int variableId = variableMap.getOrDefault((String) variableDropdown.getSelectedItem(), -1);
+				if (variableId == -1) {
+					return new ArrayList<>();
+				}
+
 				String sql = "SELECT DISTINCT STATEMENTS.ID, " + subString + ", ENTITIES.Value "
 						+ "FROM STATEMENTS "
 						+ "INNER JOIN DOCUMENTS ON DOCUMENTS.ID = STATEMENTS.DocumentId "
 						+ "INNER JOIN VARIABLES ON VARIABLES.StatementTypeId = STATEMENTS.StatementTypeId "
 						+ "INNER JOIN DATASHORTTEXT ON DATASHORTTEXT.StatementId = STATEMENTS.ID "
 						+ "INNER JOIN ENTITIES ON ENTITIES.ID = DATASHORTTEXT.Entity "
-						+ "WHERE ENTITIES.VariableId = 3;";
+						+ "WHERE ENTITIES.VariableId = " + variableId + ";";
 
 				try (Connection conn = Dna.sql.getDataSource().getConnection();
 						PreparedStatement s = conn.prepareStatement(sql);
