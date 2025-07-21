@@ -405,4 +405,85 @@ public class Statement implements Comparable<Statement> {
 			return 1;
 		}
 	}
+
+    public void setAttribute2(String concept) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'setAttribute2'");
+    }
 }
+
+/*public void openAnnotationWindow() {
+    JFrame frame = new JFrame("Annotations Viewer");
+    frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    frame.setSize(800, 600);
+
+    JTable table = new JTable(); // empty table initially
+    JScrollPane scrollPane = new JScrollPane(table);
+    frame.add(scrollPane);
+    frame.setVisible(true);
+
+    // Background loading
+    new SwingWorker<List<String[]>, Void>() {
+		String[] columnNames;
+
+        @Override
+        protected List<String[]> doInBackground() {
+            List<String[]> results = new ArrayList<>();
+            String subString = "SUBSTRING(DOCUMENTS.Text, Start + 1, Stop - Start) AS Text";
+        	if (Dna.sql.getConnectionProfile().getType().equals("postgresql")) {
+            	subString = "SUBSTRING(DOCUMENTS.Text, CAST(Start + 1 AS INT4), CAST(Stop - Start AS INT4)) AS Text";
+        	}
+
+			String sql = "SELECT DISTINCT " + subString + ", STATEMENTS.ID, VARIABLES.StatementTypeId, ENTITIES.Value "
+					+ "FROM STATEMENTS "
+					+ "INNER JOIN DOCUMENTS ON DOCUMENTS.ID = STATEMENTS.DocumentId "
+					+ "INNER JOIN VARIABLES ON VARIABLES.StatementTypeId = STATEMENTS.StatementTypeId "
+					+ "INNER JOIN DATASHORTTEXT ON DATASHORTTEXT.StatementId = STATEMENTS.ID "
+					+ "INNER JOIN ENTITIES ON ENTITIES.ID = DATASHORTTEXT.Entity;";
+
+
+            try (Connection conn = Dna.sql.getDataSource().getConnection();
+                 PreparedStatement s = conn.prepareStatement(sql);
+                 ResultSet rs = s.executeQuery()) {
+            
+				java.sql.ResultSetMetaData meta = rs.getMetaData();
+            	int columnCount = meta.getColumnCount();
+
+            // Get actual column names
+            	columnNames = new String[columnCount];
+				for (int i = 1; i <= columnCount; i++) {
+					columnNames[i - 1] = meta.getColumnName(i);
+				}
+
+            // Get row data
+				while (rs.next()) {
+					String[] row = new String[columnCount];
+					for (int i = 1; i <= columnCount; i++) {
+						row[i - 1] = rs.getString(i);
+					}
+					results.add(row);
+				}
+
+			} catch (SQLException e) {
+				LogEvent le = new LogEvent(Logger.WARNING,
+					"[GUI] Could not retrieve annotations from database.",
+					"Tried to access all columns from STATEMENTS table, but something went wrong.",
+					e);
+				Dna.logger.log(le);
+			}
+
+			return results;
+		}
+
+        @Override
+        protected void done() {
+            try {
+                List<String[]> data = get();
+                String[][] tableData = data.toArray(new String[0][]);
+                table.setModel(new javax.swing.table.DefaultTableModel(tableData, columnNames));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }.execute();
+}*/

@@ -312,10 +312,7 @@ public class MainWindow extends JFrame {
 		statementsAndCoderPanel.add(coderSelectionPanel, BorderLayout.NORTH);
 		statementsAndCoderPanel.add(getStatementPanel(), BorderLayout.CENTER);
 
-		//Grace edits
-		JPanel SuggestedAnnotatePanel = new Jpanel(new BorderLayout());
-		SuggestedAnnotatePanel.add(menubar, BorderLayout.NORTH);
-
+	
 		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanel);
 		verticalSplitPane.setOneTouchExpandable(true);
 		JSplitPane rightSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, verticalSplitPane, statementsAndCoderPanel);
