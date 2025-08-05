@@ -38,7 +38,7 @@ import logger.Logger;
 import model.Coder;
 import model.TableDocument;
 
-class DocumentTablePanel extends JPanel {
+public class DocumentTablePanel extends JPanel {
 	private static final long serialVersionUID = 4543056929753553570L;
 	private JTable documentTable;
 	private DocumentTableModel documentTableModel;
@@ -313,7 +313,7 @@ class DocumentTablePanel extends JPanel {
 	 * 
 	 * @return  The document ID. Can be {@code -1} if nothing is selected.
 	 */
-	int getSelectedDocumentId() {
+	public int getSelectedDocumentId() {
 		int viewRow = this.documentTable.getSelectedRow();
 		if (viewRow > -1) {
 			int modelRow = this.convertRowIndexToModel(viewRow);

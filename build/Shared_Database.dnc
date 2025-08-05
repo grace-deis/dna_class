@@ -1,0 +1,9 @@
+{
+  "type": "mysql",
+  "url": "JKiiYrn/7HlyHegkCeOLLrqgrwHRlH2o3l5LZV9NYREiwr6oKwmeZl0bq8pOZZaD5WuJFRJsN6+e/FWL4f0a/w==",
+  "user": "xUTJvzi5/5/ZZQM1b/sUfPcPMYz5U+oiYpkOtSsmqFb1OKaYuonGzBVI15m4vzHH",
+  "password": "C+CRkvvTTNRmx05oDNtEUZUSS5NHrugaICDaprzcUjqKRXba4/UuCBeGb8F2hPx+ABRxdzfXbn34ExBvclGWIQ==",
+  "databaseName": "erp2025",
+  "port": 3306,
+  "coderId": 4
+}

@@ -42,6 +42,7 @@ import model.TableDocument;
 import model.Value;
 import sql.ConnectionProfile;
 import sql.Sql;
+import text.NaiveBayesClassifier;
 
 /**
  * Main window that instantiates and plugs the different view components
@@ -86,6 +87,7 @@ public class MainWindow extends JFrame {
 	private ActionLoggerDialog actionLoggerDialog;
 	private ActionAboutWindow actionAboutWindow;
 	private Popup popup = null;
+	private Map<String, NaiveBayesClassifier.TrainedClassifier> nbClassifiers = null;
 
 	/**
 	 * A document table swing worker thread.
@@ -742,6 +744,10 @@ public class MainWindow extends JFrame {
 	 */
 	private StatementPanel getStatementPanel() {
 		return statementPanel;
+	}
+
+	public DocumentTablePanel getDocumentTablePanel() {
+    	return documentTablePanel;
 	}
 
 	/**
