@@ -4,23 +4,29 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.MouseInfo;
 import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.AWTEvent;
+import java.awt.Component;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.Arrays;
 
-import javax.swing.JButton;
-import javax.swing.JComboBox;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyleContext;
+import javax.swing.JDialog;
 
 import dna.Dna;
 import logger.LogEvent;
@@ -42,7 +48,8 @@ class TextPanel extends JPanel {
 	private StyleContext sc;
 	private int documentId;
 	private ArrayList<PredictedStatement> predictedStatements = new ArrayList<>();
-	
+	private JDialog infoDialog = null;
+	private String annotationMethod = null;
 	/**
 	 * Create a new text panel.
 	 * @throws Exception 
@@ -70,34 +77,43 @@ class TextPanel extends JPanel {
 		textScrollPane = new JScrollPane(textWindow);
 		textScrollPane.setPreferredSize(new Dimension(500, 450));
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-		this.add(textScrollPane);}
-
-		/*// Annotation method dropdown
-		JPanel topPanel = new JPanel();
-		topPanel.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT));
-		JLabel methodLabel = new JLabel("Annotation Method:");
-		JComboBox<String> methodDropdown = new JComboBox<>(new String[] { "Select Method", "Naive Bayes", "To Do" });
-		topPanel.add(methodLabel);
-		topPanel.add(methodDropdown);
-
-
-		// Annotate button
-		JButton annotateButton = new JButton("Annotate");
-		topPanel.add(annotateButton);
-		annotateButton.addActionListener(e -> {
-			try {
-				// TO DO: Implement the annotation logic here
-				JOptionPane.showMessageDialog(this, "Annotation logic not implemented yet.");
-			} catch (Exception ex) {
-				LogEvent logEvent = new LogEvent(Logger.ERROR, "Annotation failed", "An error occurred while annotating the text.", ex);
-				Dna.logger.log(logEvent);
-				JOptionPane.showMessageDialog(this, "An error occurred during annotation: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-			}
-		});
-
-		this.add(topPanel, BorderLayout.NORTH);
-	}
+		this.add(textScrollPane);
 	
+
+        textWindow.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                int caretPos = textWindow.getCaretPosition();
+                for (PredictedStatement ps : predictedStatements) {
+                    if (caretPos >= ps.getStart() && caretPos < ps.getStop()) {
+                        showAllPredictedValues(ps);
+                        break;
+                    }
+                }
+            }
+        });
+
+		// Global listener to hide the dialog if clicked anywhere else
+		Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
+			if (infoDialog != null && infoDialog.isVisible() && event instanceof MouseEvent) {
+				MouseEvent me = (MouseEvent) event;
+				if (me.getID() == MouseEvent.MOUSE_PRESSED) {
+					Component c = SwingUtilities.getDeepestComponentAt(infoDialog, me.getX(), me.getY());
+					if (c == null) {
+						hidePredictionInfo();
+					}
+				}
+			}
+		}, AWTEvent.MOUSE_EVENT_MASK);
+	}
+
+	private void hidePredictionInfo() {
+		if (infoDialog != null) {
+			infoDialog.setVisible(false);
+			infoDialog.dispose();
+			infoDialog = null;
+		}
+	}
+
 	/**
 	 * Return the text pane component.
 	 * 
@@ -140,9 +156,144 @@ class TextPanel extends JPanel {
 		});
 	}
 
-		public void setPredictedStatements(ArrayList<PredictedStatement> preds) {
+	public void setAnnotationMethod(String method) {
+		this.annotationMethod = method;
+	}
+
+	public void setPredictedStatements(ArrayList<PredictedStatement> preds) {
         this.predictedStatements = preds;
     }
+
+	public boolean hasPredictedHighlights() {
+		if (predictedStatements == null) return false;
+		for (PredictedStatement ps : predictedStatements) {
+			if (ps.getConceptProb() > 0.7) {
+				return true;
+			}
+		}
+		return false;
+    }
+
+
+	public void suggestHighlights() {
+		if (annotationMethod == null || annotationMethod.equals("Select Method")) {
+			clearPredictedStatements();
+			return;
+		}
+		if ("Naive Bayes".equals(annotationMethod)) {
+			highlightUsingNaiveBayes();
+		}
+		// else if ("Other Method".equals(annotationMethod)) {
+		//     highlightUsingOtherMethod();
+		// }
+	}
+
+
+	private void highlightUsingNaiveBayes() {
+		var classifiers = text.NaiveBayesClassifier.trainByVariableGroups();
+		if (classifiers != null && !classifiers.isEmpty()) {
+			String text = textWindow.getText();
+			ArrayList<PredictedStatement> preds = new ArrayList<>();
+			String[] sentences = smartSentenceSplit(text);
+			int pos = 0;
+			for (String sentence : sentences) {
+				int start = text.indexOf(sentence, pos);
+				int stop = start + sentence.length();
+				Map<String, String> predictedValues = new HashMap<>();
+				Double conceptProb = null;
+				for (String var : classifiers.keySet()) {
+					NaiveBayesClassifier.TrainedClassifier tc = classifiers.get(var);
+					double[] x = NaiveBayesClassifier.vectorizeTfIdf(sentence, tc.vocab, tc.vocabDf, sentences.length);
+					int predIdx = tc.model.predict(x);
+					String predictedVar = NaiveBayesClassifier.inverseLabelMap(tc.labelMap, predIdx);
+					predictedValues.put(var, predictedVar);
+					if (var.equals("concept")) {
+						// Compute concept probability
+						double[] classScores = new double[tc.labelMap.size()];
+						for (int c = 0; c < classScores.length; c++) {
+							double score = tc.model.logPrior[c];
+							for (int j = 0; j < x.length; j++) {
+								score += x[j] * tc.model.logLikelihood[c][j];
+							}
+							classScores[c] = score;
+						}
+						double maxScore = Arrays.stream(classScores).max().orElse(0.0);
+						double sumExp = 0.0;
+						for (int c = 0; c < classScores.length; c++) {
+							classScores[c] = Math.exp(classScores[c] - maxScore);
+							sumExp += classScores[c];
+						}
+						conceptProb = classScores[predIdx] / sumExp;
+					}
+				}
+				preds.add(new PredictedStatement(start, stop, predictedValues, conceptProb));
+				pos = stop;
+			}
+			setPredictedStatements(preds);
+			paintStatements();
+		}
+	}
+
+	public static String[] smartSentenceSplit(String text) {
+		// Abbreviations to protect (add more as needed)
+		String abbrevPattern = "(Mr|Ms|Mrs|Dr|Prof|hon|Sr|Jr)\\.";
+		// Replace periods after abbreviations with a placeholder
+		String safeText = text.replaceAll(abbrevPattern, "$1<ABBR_DOT>");
+		// Split on punctuation followed by whitespace and a capital letter (likely new sentence)
+		String pattern = "(?<=[.!?])\\s+(?=[A-Z])";
+		String[] sentences = safeText.split(pattern);
+		// Restore periods in abbreviations
+		for (int i = 0; i < sentences.length; i++) {
+			sentences[i] = sentences[i].replaceAll("<ABBR_DOT>", ".");
+		}
+		return sentences;
+	}
+
+	public void clearPredictedStatements() {
+		setPredictedStatements(new ArrayList<>());
+		paintStatements();
+	}
+
+	private void showAllPredictedValues(PredictedStatement ps) {
+    StringBuilder sb = new StringBuilder();
+    for (Map.Entry<String, String> entry : ps.getPredictedValues().entrySet()) {
+        sb.append("Predicted ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+    }
+    if (ps.getConceptProb() != null) {
+        sb.append(String.format("Concept probability: %.4f\n", ps.getConceptProb()));
+    }
+
+    // Create a non-modal, undecorated dialog that closes on focus lost
+    JDialog popup = new JDialog(SwingUtilities.getWindowAncestor(this));
+    popup.setUndecorated(true);
+    popup.setModal(false);
+
+    JTextArea textArea = new JTextArea(sb.toString());
+    textArea.setEditable(false);
+    textArea.setOpaque(true);
+    textArea.setBackground(new Color(255,255,220));
+    textArea.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+    popup.add(textArea);
+    popup.pack();
+
+    // Position: center over this panel, or use mouse location
+    Point mouse = MouseInfo.getPointerInfo().getLocation();
+    popup.setLocation(mouse);
+
+    // Dispose on focus lost
+    popup.addWindowFocusListener(new java.awt.event.WindowAdapter() {
+        public void windowLostFocus(java.awt.event.WindowEvent e) {
+            popup.dispose();
+        }
+    });
+
+    popup.setVisible(true);
+    popup.requestFocus();
+}
+
+
+
 
 	/**
 	 * Set the contents of the text panel, including the document ID and text,
@@ -164,7 +315,7 @@ class TextPanel extends JPanel {
 	 */
 	void paintStatements() {
 		if (documentId > -1) {
-			//remove all initial foreground color styles
+			// Remove all initial foreground color styles
 			int initialStart = 0;
 			int initialEnd = textWindow.getText().length();
 			Style blackStyle = sc.addStyle("ConstantWidth", null);
@@ -172,8 +323,9 @@ class TextPanel extends JPanel {
 			StyleConstants.setBackground(blackStyle, Color.white);
 			doc.setCharacterAttributes(initialStart, initialEnd - initialStart, blackStyle, false);
 
-			// color statements
+			// color statements (coded)
 			ArrayList<Statement> statements = Dna.sql.getShallowStatements(documentId);
+			ArrayList<int[]> codedRanges = new ArrayList<>();
 			int i, start;
 			for (i = 0; i < statements.size(); i++) {
 				start = statements.get(i).getStart();
@@ -188,18 +340,36 @@ class TextPanel extends JPanel {
 					}
 				}
 				doc.setCharacterAttributes(start, statements.get(i).getStop() - start, bgStyle, false);
+				codedRanges.add(new int[]{start, statements.get(i).getStop()});
 			}
 
+			// paint predicted highlights (do not overlap coded statements)
 			for (PredictedStatement ps : predictedStatements) {
-				Style predStyle = sc.addStyle("PredictedHighlight", null);
-				StyleConstants.setBackground(predStyle, new Color (255, 255, 0, 128)); // semi-transparent yellow
 				int predStart = ps.getStart();
-				int predLength = ps.getStop() - predStart;
-				if (predStart >= 0 && predStart + predLength <= textWindow.getText().length()) {
-					doc.setCharacterAttributes(predStart, predLength, predStyle, false);
+				int predStop = ps.getStop();
+				boolean overlaps = false;
+				for (int[] range : codedRanges) {
+					if (predStart < range[1] && predStop > range[0]) {
+						overlaps = true;
+						break;
+					}
 				}
-			}
-			
+				if (overlaps) continue;
+
+				double minAlpha = 25;
+				double maxAlpha = 220;
+				double curve = 4.0;
+				double certainty = ps.getConceptProb();
+				int alpha = (int) (minAlpha + (maxAlpha - minAlpha) * Math.pow(certainty, curve));
+				Color highlightColor = new Color(100, 149, 237, alpha); // yellow with variable opacity
+                Style predStyle = sc.addStyle("PredictedHighlight", null);
+                StyleConstants.setBackground(predStyle, highlightColor);
+                int predLength = predStop - predStart;
+                if (predStart >= 0 && predStart + predLength <= textWindow.getText().length()) {
+                    doc.setCharacterAttributes(predStart, predLength, predStyle, false);
+                }
+            }
+
 			// color regex
 			ArrayList<Regex> regex = Dna.sql.getRegexes();
 			for (i = 0; i < regex.size(); i++) {
@@ -215,26 +385,6 @@ class TextPanel extends JPanel {
 				}
 			}
 		}
-	}
-
-	public void suggestHighlights(NaiveBayesClassifier.TrainedClassifier tc) {
-		String text = textWindow.getText();
-		ArrayList<PredictedStatement> preds = new ArrayList<>();
-		// Split into sentences (simple split, can be improved)
-		String[] sentences = text.split("(?<=[.!?])\\s+");
-		int pos = 0;
-		for (String sentence : sentences) {
-			// Vectorize using classifier's vocab/df
-			double[] x = NaiveBayesClassifier.vectorizeTfIdf(sentence, tc.vocab, tc.vocabDf, sentences.length);
-			int predIdx = tc.model.predict(x);
-			String predictedVar = NaiveBayesClassifier.inverseLabelMap(tc.labelMap, predIdx);
-			int start = text.indexOf(sentence, pos);
-			int stop = start + sentence.length();
-			preds.add(new PredictedStatement(start, stop, predictedVar));
-			pos = stop;
-		}
-		setPredictedStatements(preds);
-		paintStatements();
 	}
 	
 	/**
@@ -259,18 +409,21 @@ class TextPanel extends JPanel {
 			}
 		}
 	}
+	class PredictedStatement {
+		private int start, stop;
+		private Map<String, String> predictedValues;
+		private Double conceptProb; // Nullable: only present for concept, or set to null for others
+
+		public PredictedStatement(int start, int stop, Map<String, String> predictedValues, Double conceptProb) {
+			this.start = start;
+			this.stop = stop;
+			this.predictedValues = predictedValues;
+			this.conceptProb = conceptProb;
+		}
+		public int getStart() { return start; }
+		public int getStop() { return stop; }
+		public Map<String, String> getPredictedValues() { return predictedValues; }
+		public Double getConceptProb() { return conceptProb; }
+	}
 }
 
-class PredictedStatement {
-    private int start, stop;
-    private String predictedVariable;
-
-    public PredictedStatement(int start, int stop, String var) {
-        this.start = start;
-        this.stop = stop;
-        this.predictedVariable = var;
-    }
-    public int getStart() { return start; }
-    public int getStop() { return stop; }
-    public String getPredictedVariable() { return predictedVariable; }
-}

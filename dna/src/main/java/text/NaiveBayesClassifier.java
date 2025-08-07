@@ -6,14 +6,13 @@ import java.sql.ResultSet;
 import java.util.*;
 
 /**
- * Trains a separate Naive Bayes classifier for each unique Value group,
- * predicting Variable from Text using TF-IDF features.
- * This implementation does not use Smile for classification.
+ * Trains a separate Naive Bayes classifier for each unique Variable group,
+ * predicting Value from Text using TF-IDF features.
  */
 public class NaiveBayesClassifier {
 
     /**
-     * Holds a trained classifier for a Value group.
+     * Holds a trained classifier for a Variable group.
      */
     public static class TrainedClassifier {
         public final NaiveBayesModel model;
@@ -42,11 +41,11 @@ public class NaiveBayesClassifier {
     }
 
     /**
-     * Trains classifiers grouped by Value.
-     * @return Map of Value to trained classifier.
+     * Trains classifiers grouped by Variable.
+     * @return Map of Variable to trained classifier.
      */
-    public static Map<String, TrainedClassifier> trainByValueGroups() {
-        Map<String, List<Sample>> samplesByValue = new HashMap<>();
+    public static Map<String, TrainedClassifier> trainByVariableGroups() {
+        Map<String, List<Sample>> samplesByVariable = new HashMap<>();
 
         // SQL extraction
         String subString = "SUBSTRING(DOCUMENTS.Text, Start + 1, Stop - Start) AS Text";
@@ -70,8 +69,8 @@ public class NaiveBayesClassifier {
                 String variable = rs.getString("Variable");
                 String text = rs.getString("Text");
                 if (value != null && variable != null && text != null && !text.trim().isEmpty()) {
-                    samplesByValue.computeIfAbsent(value, k -> new ArrayList<>())
-                        .add(new Sample(text, variable));
+                    samplesByVariable.computeIfAbsent(variable, k -> new ArrayList<>())
+                        .add(new Sample(text, value));
                 }
             }
         } catch (Exception ex) {
@@ -80,8 +79,8 @@ public class NaiveBayesClassifier {
         }
 
         Map<String, TrainedClassifier> classifiers = new HashMap<>();
-        for (Map.Entry<String, List<Sample>> entry : samplesByValue.entrySet()) {
-            String value = entry.getKey();
+        for (Map.Entry<String, List<Sample>> entry : samplesByVariable.entrySet()) {
+            String variable = entry.getKey();
             List<Sample> samples = entry.getValue();
             if (samples.size() < 2) continue;
 
@@ -95,10 +94,10 @@ public class NaiveBayesClassifier {
             // Train NB model (custom implementation)
             NaiveBayesModel nb = trainNaiveBayes(X, y, labelMap.size());
 
-            classifiers.put(value, new TrainedClassifier(nb, vocab, labelMap, df));
+            classifiers.put(variable, new TrainedClassifier(nb, vocab, labelMap, df));
         }
 
-        System.out.println("Trained classifiers for " + classifiers.size() + " Value groups.");
+        System.out.println("Trained classifiers for " + classifiers.size() + " Variable groups.");
         return classifiers;
     }
 
@@ -260,6 +259,33 @@ public class NaiveBayesClassifier {
             }
             return bestClass;
         }
+
+        /**
+         * Returns the probability distribution for all classes (softmax over log-probabilities).
+         */
+        public double[] predictProba(double[] x) {
+            double[] logProbs = new double[logPrior.length];
+            for (int c = 0; c < logPrior.length; c++) {
+                double score = logPrior[c];
+                for (int j = 0; j < x.length; j++) {
+                    score += x[j] * logLikelihood[c][j];
+                }
+                logProbs[c] = score;
+            }
+            // Softmax
+            double maxLog = Double.NEGATIVE_INFINITY;
+            for (double lp : logProbs) maxLog = Math.max(maxLog, lp);
+            double sum = 0.0;
+            double[] probs = new double[logProbs.length];
+            for (int i = 0; i < logProbs.length; i++) {
+                probs[i] = Math.exp(logProbs[i] - maxLog);
+                sum += probs[i];
+            }
+            for (int i = 0; i < probs.length; i++) {
+                probs[i] /= sum;
+            }
+            return probs;
+        }
     }
 
     /**
@@ -270,5 +296,38 @@ public class NaiveBayesClassifier {
             if (entry.getValue() == idx) return entry.getKey();
         }
         return null;
+    }
+
+    /**
+     * Predict the value for each variable group for the given text.
+     * For the group where variable="concept", also returns the probability.
+     * Returns a map: variable -> PredictionResult(value, prob) (prob is only set for "concept", else -1).
+     */
+    public static class PredictionResult {
+        public final String value;
+        public final double prob; // -1 if not calculated
+
+        public PredictionResult(String value, double prob) {
+            this.value = value;
+            this.prob = prob;
+        }
+    }
+
+    public static Map<String, PredictionResult> predictAll(Map<String, TrainedClassifier> classifiers, String text) {
+        Map<String, PredictionResult> results = new HashMap<>();
+        for (Map.Entry<String, TrainedClassifier> entry : classifiers.entrySet()) {
+            String variable = entry.getKey();
+            TrainedClassifier tc = entry.getValue();
+            double[] x = vectorizeTfIdf(text, tc.vocab, tc.vocabDf, 1);
+            int predIdx = tc.model.predict(x);
+            String predictedValue = inverseLabelMap(tc.labelMap, predIdx);
+            double prob = -1.0;
+            if ("concept".equals(variable)) {
+                double[] probs = tc.model.predictProba(x);
+                prob = probs[predIdx];
+            }
+            results.put(variable, new PredictionResult(predictedValue, prob));
+        }
+        return results;
     }
 }

@@ -42,7 +42,6 @@ import model.TableDocument;
 import model.Value;
 import sql.ConnectionProfile;
 import sql.Sql;
-import text.NaiveBayesClassifier;
 
 /**
  * Main window that instantiates and plugs the different view components
@@ -87,7 +86,6 @@ public class MainWindow extends JFrame {
 	private ActionLoggerDialog actionLoggerDialog;
 	private ActionAboutWindow actionAboutWindow;
 	private Popup popup = null;
-	private Map<String, NaiveBayesClassifier.TrainedClassifier> nbClassifiers = null;
 
 	/**
 	 * A document table swing worker thread.
@@ -299,7 +297,48 @@ public class MainWindow extends JFrame {
 				actionAboutWindow);
 		statusBar = new StatusBar();
 		statementPanel = new StatementPanel(statementTableModel, actionRecodeStatements, actionRemoveStatements);
+		
+		String[] annotationStyles = { "Select Automatic Annotation Method", "Naive Bayes", "Other Annotation" };
+        JComboBox<String> annotationStyleBox = new JComboBox<>(annotationStyles);
+		
+		JCheckBox highlightCheckbox = new JCheckBox("Show Auto Annotation Highlights");
+		highlightCheckbox.setToolTipText("Show/hide automatic highlights from selected classifier");
+	
+		highlightCheckbox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (highlightCheckbox.isSelected()) {
+					textPanel.suggestHighlights(); // uses the current annotation method
+				} else {
+					textPanel.clearPredictedStatements();
+				}
+			}
+		});
+
+		annotationStyleBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String method = (String) annotationStyleBox.getSelectedItem();
+				textPanel.setAnnotationMethod(method);
+				// Optionally, clear highlights when changing method:
+				textPanel.clearPredictedStatements();
+			}
+		});
+        
+
 		textPanel = new TextPanel();
+
+        // Panel that holds both the dropdown and the button at the top
+        JPanel annotationPanel = new JPanel(new BorderLayout());
+        annotationPanel.add(annotationStyleBox, BorderLayout.CENTER);
+        annotationPanel.add(highlightCheckbox, BorderLayout.EAST);
+		annotationPanel.setLayout(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT));
+
+        // Panel that holds the annotationPanel and the text panel
+        JPanel textPanelWithControls = new JPanel(new BorderLayout());
+        textPanelWithControls.add(annotationPanel, BorderLayout.NORTH);
+        textPanelWithControls.add(textPanel, BorderLayout.CENTER);
+
 		coderSelectionPanel = new CoderSelectionPanel();
 		
 		// add listeners
@@ -314,8 +353,7 @@ public class MainWindow extends JFrame {
 		statementsAndCoderPanel.add(coderSelectionPanel, BorderLayout.NORTH);
 		statementsAndCoderPanel.add(getStatementPanel(), BorderLayout.CENTER);
 
-	
-		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanel);
+		JSplitPane verticalSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, documentsAndToolBarPanel, textPanelWithControls);
 		verticalSplitPane.setOneTouchExpandable(true);
 		JSplitPane rightSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, verticalSplitPane, statementsAndCoderPanel);
 		rightSplitPane.setOneTouchExpandable(true);
