@@ -297,36 +297,20 @@ public class MainWindow extends JFrame {
 				actionAboutWindow);
 		statusBar = new StatusBar();
 		statementPanel = new StatementPanel(statementTableModel, actionRecodeStatements, actionRemoveStatements);
-		
-		String[] annotationStyles = { "Select Automatic Annotation Method", "Naive Bayes", "Other Annotation" };
+		textPanel = new TextPanel();
+		coderSelectionPanel = new CoderSelectionPanel();
+
+		// add listeners
+		Dna.logger.addListener(statusBar);
+
+		// layout
+		// add annotation style dropdown and highlight checkbox, add names of new annotation methods here
+		String[] annotationStyles = { "Select Automatic Annotation Method", "Naive Bayes"};
         JComboBox<String> annotationStyleBox = new JComboBox<>(annotationStyles);
 		
 		JCheckBox highlightCheckbox = new JCheckBox("Show Auto Annotation Highlights");
 		highlightCheckbox.setToolTipText("Show/hide automatic highlights from selected classifier");
-	
-		highlightCheckbox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				if (highlightCheckbox.isSelected()) {
-					textPanel.suggestHighlights(); // uses the current annotation method
-				} else {
-					textPanel.clearPredictedStatements();
-				}
-			}
-		});
 
-		annotationStyleBox.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				String method = (String) annotationStyleBox.getSelectedItem();
-				textPanel.setAnnotationMethod(method);
-				// Optionally, clear highlights when changing method:
-				textPanel.clearPredictedStatements();
-			}
-		});
-        
-
-		textPanel = new TextPanel();
 
         // Panel that holds both the dropdown and the button at the top
         JPanel annotationPanel = new JPanel(new BorderLayout());
@@ -338,13 +322,7 @@ public class MainWindow extends JFrame {
         JPanel textPanelWithControls = new JPanel(new BorderLayout());
         textPanelWithControls.add(annotationPanel, BorderLayout.NORTH);
         textPanelWithControls.add(textPanel, BorderLayout.CENTER);
-
-		coderSelectionPanel = new CoderSelectionPanel();
-		
-		// add listeners
-		Dna.logger.addListener(statusBar);
-		
-		// layout
+	
 		JPanel documentsAndToolBarPanel = new JPanel(new BorderLayout());
 		documentsAndToolBarPanel.add(toolbar, BorderLayout.NORTH);
 		documentsAndToolBarPanel.add(documentTablePanel, BorderLayout.CENTER);
@@ -679,6 +657,30 @@ public class MainWindow extends JFrame {
 				}
 			}
 		});
+
+		// Set default annotation method, highlight checkbox will highlight statements
+		highlightCheckbox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				if (highlightCheckbox.isSelected()) {
+					textPanel.suggestHighlights(); // uses the current annotation method
+				} else {
+					textPanel.clearPredictedStatements();
+				}
+			}
+		});
+
+		annotationStyleBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String method = (String) annotationStyleBox.getSelectedItem();
+				textPanel.setAnnotationMethod(method);
+				// Optionally, clear highlights when changing method:
+				textPanel.clearPredictedStatements();
+			}
+		});
+
+	
 		JCheckBoxMenuItem popupAutoCompleteItem = menuBar.getPopupAutoCompleteItem();
 		popupAutoCompleteItem.addActionListener(new ActionListener() {
 			@Override

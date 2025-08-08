@@ -79,7 +79,7 @@ class TextPanel extends JPanel {
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		this.add(textScrollPane);
 	
-
+		// Add mouse listener to the text window to show predicted values when clicking on predicted statement
         textWindow.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 int caretPos = textWindow.getCaretPosition();
@@ -174,7 +174,8 @@ class TextPanel extends JPanel {
 		return false;
     }
 
-
+	// highlights based on the selected annotation method
+	// currently only Naive Bayes is implemented, but can be extended to other methods
 	public void suggestHighlights() {
 		if (annotationMethod == null || annotationMethod.equals("Select Method")) {
 			clearPredictedStatements();
@@ -188,7 +189,9 @@ class TextPanel extends JPanel {
 		// }
 	}
 
-
+	// Highlights the text using Naive Bayes classification.
+	// It trains classifiers for each variable group and predicts values for sentences in the text.
+	// The predicted values are stored in PredictedStatement objects, which are then used to highlight the text.
 	private void highlightUsingNaiveBayes() {
 		var classifiers = text.NaiveBayesClassifier.trainByVariableGroups();
 		if (classifiers != null && !classifiers.isEmpty()) {
@@ -409,6 +412,8 @@ class TextPanel extends JPanel {
 			}
 		}
 	}
+	// Represents a predicted statement with its start and stop positions, predicted values, and concept probability.
+	// This class is used to store the results of Naive Bayes classification for each sentence in the text.
 	class PredictedStatement {
 		private int start, stop;
 		private Map<String, String> predictedValues;
