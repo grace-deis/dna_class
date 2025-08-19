@@ -40,7 +40,7 @@ import text.NaiveBayesClassifier;
  * statements in the given document in different colors. It keeps the current
  * document ID on record to paint only the statements in the current document.
  */
-class TextPanel extends JPanel {
+public class TextPanel extends JPanel {
 	private static final long serialVersionUID = -8094978928012991210L;
 	private JTextPane textWindow;
 	private JScrollPane textScrollPane;
@@ -228,6 +228,10 @@ class TextPanel extends JPanel {
 						}
 						conceptProb = classScores[predIdx] / sumExp;
 					}
+				}
+				if ("nonstatement".equals(predictedValues.get("concept"))) {
+					pos = stop;
+					continue;
 				}
 				preds.add(new PredictedStatement(start, stop, predictedValues, conceptProb));
 				pos = stop;

@@ -5,6 +5,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
 
+import model.Statement;
+import model.StatementType;
+import model.Value;
+
 /**
  * Trains a separate Naive Bayes classifier for each unique Variable group,
  * predicting Value from Text using TF-IDF features.
@@ -42,32 +46,35 @@ public class NaiveBayesClassifier {
 
     /**
      * Trains classifiers grouped by Variable.
+     * Includes both coded and negative (uncoded) sentences as "nonstatement".
      * @return Map of Variable to trained classifier.
      */
     public static Map<String, TrainedClassifier> trainByVariableGroups() {
         Map<String, List<Sample>> samplesByVariable = new HashMap<>();
 
-        // SQL extraction
-        String subString = "SUBSTRING(DOCUMENTS.Text, Start + 1, Stop - Start) AS Text";
+        // SQL extraction (coded statements)
+        String subString = "SUBSTRING(DOCUMENTS.Text, STATEMENTS.Start + 1, STATEMENTS.Stop - STATEMENTS.Start) AS Text";
         if (dna.Dna.sql.getConnectionProfile().getType().equals("postgresql")) {
             subString = "SUBSTRING(DOCUMENTS.Text, CAST(Start + 1 AS INT4), CAST(Stop - Start AS INT4)) AS Text";
         }
         String sql =
-            "SELECT DISTINCT STATEMENTS.ID, " + subString + ", ENTITIES.Value, VARIABLES.Variable, VARIABLES.ID " +
+            "SELECT DISTINCT STATEMENTS.ID, STATEMENTS.DocumentId as DocumentId, " + subString + ", ENTITIES.Value, VARIABLES.Variable, VARIABLES.ID " +
             "FROM STATEMENTS " +
             "INNER JOIN DOCUMENTS ON DOCUMENTS.ID = STATEMENTS.DocumentId " +
             "INNER JOIN DATASHORTTEXT ON DATASHORTTEXT.StatementId = STATEMENTS.ID " +
             "INNER JOIN ENTITIES ON ENTITIES.ID = DATASHORTTEXT.Entity " +
             "INNER JOIN VARIABLES ON VARIABLES.ID = ENTITIES.VariableId;";
 
+        Set<Integer> documentIds = new HashSet<>();
         try (Connection conn = dna.Dna.sql.getDataSource().getConnection();
              PreparedStatement s = conn.prepareStatement(sql);
              ResultSet rs = s.executeQuery()) {
-
             while (rs.next()) {
                 String value = rs.getString("Value");
                 String variable = rs.getString("Variable");
                 String text = rs.getString("Text");
+                int documentId = rs.getInt("DocumentId");
+                documentIds.add(documentId);
                 if (value != null && variable != null && text != null && !text.trim().isEmpty()) {
                     samplesByVariable.computeIfAbsent(variable, k -> new ArrayList<>())
                         .add(new Sample(text, value));
@@ -76,6 +83,77 @@ public class NaiveBayesClassifier {
         } catch (Exception ex) {
             ex.printStackTrace();
             return Collections.emptyMap();
+        }
+
+        // Dynamically get all variable names from all statement types
+        Set<String> variableNameSet = new HashSet<>();
+        ArrayList<model.StatementType> statementTypes = dna.Dna.sql.getStatementTypes();
+        for (model.StatementType st : statementTypes) {
+            if (st.getId() == 1) {
+                for (model.Value v : st.getVariables()) {
+                    variableNameSet.add(v.getKey());
+                }
+            }
+        }
+        List<String> variableNames = new ArrayList<>(variableNameSet);
+
+
+        // Get all document IDs, not just those with coded statements
+        Set<Integer> allDocumentIds = new HashSet<>();
+        try (Connection conn = dna.Dna.sql.getDataSource().getConnection();
+            PreparedStatement s = conn.prepareStatement("SELECT ID FROM DOCUMENTS");
+            ResultSet rs = s.executeQuery()) {
+            while (rs.next()) {
+                allDocumentIds.add(rs.getInt("ID"));
+            }
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        Random rand = new Random();
+        for (int docId : allDocumentIds) {
+            String documentText = dna.Dna.sql.getDocumentText(docId);
+            ArrayList<Statement> codedStatements = dna.Dna.sql.getShallowStatements(docId);
+
+            // Get coded regions for overlap check
+            List<int[]> codedRanges = new ArrayList<>();
+            for (Statement s : codedStatements) {
+                codedRanges.add(new int[] { s.getStart(), s.getStop() });
+            }
+
+            // Split into sentences
+            String[] sentences = gui.TextPanel.smartSentenceSplit(documentText);
+            int pos = 0;
+            List<String> uncoded = new ArrayList<>();
+            for (String sentence : sentences) {
+                int start = documentText.indexOf(sentence, pos);
+                int stop = start + sentence.length();
+                pos = stop;
+
+                boolean overlaps = false;
+                for (int[] range : codedRanges) {
+                    if (start < range[1] && stop > range[0]) {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (!overlaps) {
+                    uncoded.add(sentence.trim());
+                }
+            }
+
+            // Only add "nonstatement" for variable "concept"
+            if (variableNames.contains("concept") && !uncoded.isEmpty()) {
+                Collections.shuffle(uncoded, rand);
+                int N = Math.min(uncoded.size(), codedStatements.size()*2);
+                System.out.println("Adding " + N + " uncoded sentences as 'nonstatement' for document ID " + docId);
+                System.out.println("Uncoded sentences: " + uncoded.size() + ", Coded statements: " + codedStatements.size());
+                for (int i = 0; i < N; i++) {
+                    String nonstatement = uncoded.get(i);
+                    samplesByVariable.computeIfAbsent("concept", k -> new ArrayList<>())
+                        .add(new Sample(nonstatement, "nonstatement"));
+                }
+            }
         }
 
         Map<String, TrainedClassifier> classifiers = new HashMap<>();
@@ -97,13 +175,15 @@ public class NaiveBayesClassifier {
             classifiers.put(variable, new TrainedClassifier(nb, vocab, labelMap, df));
         }
 
-        System.out.println("Trained classifiers for " + classifiers.size() + " Variable groups.");
+        System.out.println("Trained classifiers for " + classifiers.size() + " Variable groups (including nonstatements).");
         return classifiers;
     }
 
+
+
     // --- Vectorization helpers ---
 
-    /** Build vocab list from all samples. */
+    /** Build vocab list from all samples with stemming. */
     private static List<String> buildVocab(List<Sample> samples) {
         Set<String> vocabSet = new HashSet<>();
         for (Sample sample : samples) {
@@ -166,9 +246,17 @@ public class NaiveBayesClassifier {
         return x;
     }
 
-    /** Tokenizer (simple whitespace split, lowercase, can be improved). */
+    /** Tokenizer (lowercase, remove punctuation, stem words). */
     public static String[] tokenize(String text) {
-        return text.toLowerCase().replaceAll("[^a-z0-9 ]", " ").split("\\s+");
+        String[] rawTokens = text.toLowerCase().replaceAll("[^a-z0-9 ]", " ").split("\\s+");
+        PorterStemmer stemmer = new PorterStemmer();
+        ArrayList<String> stems = new ArrayList<>();
+        for (String token : rawTokens) {
+            if (token.isEmpty()) continue;
+            String stem = stemmer.stem(token);
+            if (!stem.isEmpty()) stems.add(stem);
+        }
+        return stems.toArray(new String[0]);
     }
 
     // --- Label encoding ---
