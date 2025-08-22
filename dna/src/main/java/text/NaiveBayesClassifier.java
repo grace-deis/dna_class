@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.*;
 
+import text.PorterStemmer;
 import model.Statement;
 import model.StatementType;
 import model.Value;
@@ -86,15 +87,25 @@ public class NaiveBayesClassifier {
         }
 
         // Dynamically get all variable names from all statement types
+        int statementTypeId = dna.Dna.sql.getMostCommonStatementTypeId();
+        System.out.println("Most common statement type ID: " + statementTypeId);
         Set<String> variableNameSet = new HashSet<>();
         ArrayList<model.StatementType> statementTypes = dna.Dna.sql.getStatementTypes();
+        model.StatementType targetType = null;
         for (model.StatementType st : statementTypes) {
-            if (st.getId() == 1) {
-                for (model.Value v : st.getVariables()) {
-                    variableNameSet.add(v.getKey());
-                }
+            if (st.getId() == statementTypeId) {
+                targetType = st;
+                break;
             }
         }
+        if (targetType != null) {
+            for (model.Value v : targetType.getVariables()) {
+                variableNameSet.add(v.getKey());
+            }
+        } else {
+            System.err.println("No StatementType found with ID: " + statementTypeId);
+        }
+
         List<String> variableNames = new ArrayList<>(variableNameSet);
 
 

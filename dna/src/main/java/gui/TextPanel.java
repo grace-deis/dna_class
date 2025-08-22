@@ -109,6 +109,7 @@ public class TextPanel extends JPanel {
 			ArrayList<PredictedStatement> preds = new ArrayList<>();
 			String[] sentences = smartSentenceSplit(text);
 			int pos = 0;
+			int statementTypeId = dna.Dna.sql.getMostCommonStatementTypeId();
 			for (String sentence : sentences) {
 				int start = text.indexOf(sentence, pos);
 				int stop = start + sentence.length();
@@ -127,7 +128,7 @@ public class TextPanel extends JPanel {
 				// Only highlight if concept is not "nonstatement"
 				String conceptVal = predictedValues.get("concept");
 				if (conceptVal != null && !"nonstatement".equalsIgnoreCase(conceptVal)) {
-					preds.add(new PredictedStatement(start, stop, predictedValues, predictedProbs));
+					preds.add(new PredictedStatement(start, stop, statementTypeId, predictedValues, predictedProbs));
 				}
 				pos = stop;
 			}
@@ -154,8 +155,18 @@ public class TextPanel extends JPanel {
 
 	private void showPredictionPopupForStatement(PredictedStatement ps) {
 		ArrayList<model.StatementType> types = dna.Dna.sql.getStatementTypes();
-		model.StatementType stype = types.size() > 0 ? types.get(0) : null;
+		model.StatementType stype = null;
+		int statementTypeId = ps.getStatementTypeId();
+		for (model.StatementType t : types) {
+			if (t.getId() == statementTypeId) {
+				stype = t;
+				break;
+			}
+		}
 		if (stype == null) return;
+
+		// Make stype final for use in lambdas
+		final model.StatementType stypeFinal = stype;
 
 		java.awt.Frame frame = (java.awt.Frame) SwingUtilities.getWindowAncestor(this);
 		JDialog popup = new JDialog(frame, "Predicted annotation", true);
@@ -166,17 +177,26 @@ public class TextPanel extends JPanel {
 		contentPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
 		Map<String, Object> editors = new HashMap<>();
-
-		for (model.Value v : stype.getVariables()) {
+		System.out.println("StatementType ID: " + stypeFinal.getId());
+		for (model.Value v : stypeFinal.getVariables()) {
+			System.out.println("Variable: " + v.getKey() + " (" + v.getDataType() + ")");
+		}
+		System.out.println("StatementType variables:");
+		for (model.Value v : stypeFinal.getVariables()) {
+			System.out.println(v.getKey() + " (" + v.getDataType() + ")");
+		}
+		for (model.Value v : stypeFinal.getVariables()) {
 			String var = v.getKey();
 			String dataType = v.getDataType();
 			String predValue = ps.getPredictedValues().get(var);
+			Double predProb = ps.getPredictedProbs() != null ? ps.getPredictedProbs().get(var) : null;
+
 			JPanel row = new JPanel(new BorderLayout());
 			JLabel label = new JLabel(var + ":");
 
 			JComponent editor = null;
 
-			if (dataType.equals("boolean")) {
+			if ("boolean".equals(dataType)) {
 				int entry = 0;
 				try {
 					if (predValue != null) {
@@ -226,6 +246,13 @@ public class TextPanel extends JPanel {
 			}
 			row.add(label, BorderLayout.WEST);
 			row.add(editor, BorderLayout.CENTER);
+
+			// Optionally, show probability as a label
+			if (predProb != null) {
+				JLabel probLabel = new JLabel(String.format("  (p=%.2f)", predProb));
+				row.add(probLabel, BorderLayout.EAST);
+			}
+
 			contentPanel.add(row);
 		}
 		popup.add(contentPanel, java.awt.BorderLayout.CENTER);
@@ -237,13 +264,17 @@ public class TextPanel extends JPanel {
 		buttonPanel.add(rejectButton);
 		popup.add(buttonPanel, java.awt.BorderLayout.SOUTH);
 
+		// Make documentId and textWindow final for lambda usage
+		final int docIdFinal = this.documentId;
+		final JTextPane textWindowFinal = this.textWindow;
+
 		acceptButton.addActionListener(e -> {
 			ArrayList<model.Value> filledValues = new ArrayList<>();
-			for (model.Value v : stype.getVariables()) {
+			for (model.Value v : stypeFinal.getVariables()) {
 				String var = v.getKey();
 				String dataType = v.getDataType();
 				Object valueObj = null;
-				if (dataType.equals("boolean")) {
+				if ("boolean".equals(dataType)) {
 					BooleanButtonPanel buttons = (BooleanButtonPanel) editors.get(var);
 					int val = buttons.isYes() ? 1 : 0;
 					valueObj = val;
@@ -290,13 +321,13 @@ public class TextPanel extends JPanel {
 			model.Statement s = new model.Statement(
 				ps.getStart(),
 				ps.getStop(),
-				stype.getId(),
+				stypeFinal.getId(),
 				dna.Dna.sql.getActiveCoder().getId(),
 				filledValues
 			);
-			s.setDocumentId(this.documentId);
-			s.setText(textWindow.getText().substring(ps.getStart(), ps.getStop()));
-			int insertedId = dna.Dna.sql.addStatement(s, this.documentId);
+			s.setDocumentId(docIdFinal);
+			s.setText(textWindowFinal.getText().substring(ps.getStart(), ps.getStop()));
+			int insertedId = dna.Dna.sql.addStatement(s, docIdFinal);
 			if (insertedId > 0) {
 				predictedStatements.remove(ps);
 				paintStatements();
@@ -316,8 +347,15 @@ public class TextPanel extends JPanel {
 	}
 
 	private void insertPredictedStatementAsCoded(PredictedStatement ps) {
-		ArrayList<model.StatementType> types = Dna.sql.getStatementTypes();
-		model.StatementType stype = types.size() > 0 ? types.get(0) : null;
+		ArrayList<model.StatementType> types = dna.Dna.sql.getStatementTypes();
+		model.StatementType stype = null;
+		int statementTypeId = ps.getStatementTypeId();
+		for (model.StatementType t : types) {
+			if (t.getId() == statementTypeId) {
+				stype = t;
+				break;
+			}
+		}
 		if (stype == null) return;
 
 		ArrayList<model.Value> filledValues = new ArrayList<>();
@@ -477,17 +515,19 @@ public class TextPanel extends JPanel {
 	}
 
 	public class PredictedStatement {
-		private int start, stop;
+		private int start, stop, statementTypeId;
 		private Map<String, String> predictedValues;
 		private Map<String, Double> predictedProbs;
-		public PredictedStatement(int start, int stop, Map<String, String> predictedValues, Map<String, Double> predictedProbs) {
+		public PredictedStatement(int start, int stop, int statementTypeId, Map<String, String> predictedValues, Map<String, Double> predictedProbs) {
 			this.start = start;
 			this.stop = stop;
+			this.statementTypeId = statementTypeId;
 			this.predictedValues = predictedValues;
 			this.predictedProbs = predictedProbs;
 		}
 		public int getStart() { return start; }
 		public int getStop() { return stop; }
+		public int getStatementTypeId() { return statementTypeId; }
 		public Map<String, String> getPredictedValues() { return predictedValues; }
 		public Map<String, Double> getPredictedProbs() { return predictedProbs; }
 	}

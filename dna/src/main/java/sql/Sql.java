@@ -4253,4 +4253,21 @@ public class Sql {
 		}
 		return version;
 	}
+
+	public int getMostCommonStatementTypeId() {
+		int mostCommonId = -1;
+		int maxCount = 0;
+		String sql = "SELECT StatementTypeId, COUNT(*) as cnt FROM STATEMENTS GROUP BY StatementTypeId ORDER BY cnt DESC LIMIT 1;";
+		try (Connection conn = getDataSource().getConnection();
+			PreparedStatement ps = conn.prepareStatement(sql);
+			ResultSet rs = ps.executeQuery()) {
+			if (rs.next()) {
+				mostCommonId = rs.getInt("StatementTypeId");
+				// int count = rs.getInt("cnt"); // If you want to use the count
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		return mostCommonId;
+	}
 }
