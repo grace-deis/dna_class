@@ -64,7 +64,16 @@ class DocumentTableModel extends AbstractTableModel {
 		default: return null;
 		}
 	}
-	
+
+	/**
+	 * Get the table document model.
+	 * 
+	 * @return The table document model.
+	 */
+	public DocumentTableModel getTableDocumentTableModel() {
+		return this;
+	}
+
 	/**
 	 * Set the value of a table cell.
 	 * 

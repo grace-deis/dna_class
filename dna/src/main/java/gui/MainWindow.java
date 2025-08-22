@@ -773,7 +773,7 @@ public class MainWindow extends JFrame {
 	 * 
 	 * @return Text panel.
 	 */
-	private TextPanel getTextPanel() {
+	public TextPanel getTextPanel() {
 		return textPanel;
 	}
 

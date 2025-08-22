@@ -1,45 +1,22 @@
 package gui;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Font;
-import java.awt.MouseInfo;
-import java.awt.Point;
-import java.awt.Toolkit;
-import java.awt.AWTEvent;
-import java.awt.Component;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.Map;
-import java.util.Arrays;
-
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
-import javax.swing.JTextPane;
-import javax.swing.SwingUtilities;
-import javax.swing.text.DefaultStyledDocument;
-import javax.swing.text.Style;
-import javax.swing.text.StyleConstants;
-import javax.swing.text.StyleContext;
-import javax.swing.JDialog;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+import java.util.regex.*;
+import javax.swing.*;
+import javax.swing.text.*;
 
 import dna.Dna;
 import logger.LogEvent;
 import logger.Logger;
 import model.Regex;
 import model.Statement;
+import model.Entity;
+import model.Value;
+import model.StatementType;
 import text.NaiveBayesClassifier;
 
-/**
- * Text panel, which displays the text of the selected document and paints the
- * statements in the given document in different colors. It keeps the current
- * document ID on record to paint only the statements in the current document.
- */
 public class TextPanel extends JPanel {
 	private static final long serialVersionUID = -8094978928012991210L;
 	private JTextPane textWindow;
@@ -48,112 +25,59 @@ public class TextPanel extends JPanel {
 	private StyleContext sc;
 	private int documentId;
 	private ArrayList<PredictedStatement> predictedStatements = new ArrayList<>();
-	private JDialog infoDialog = null;
 	private String annotationMethod = null;
-	/**
-	 * Create a new text panel.
-	 * @throws Exception 
-	 */
-	TextPanel() {
+
+	public TextPanel() {
 		this.setLayout(new BorderLayout());
 		sc = new StyleContext();
-	    doc = new DefaultStyledDocument(sc);
+		doc = new DefaultStyledDocument(sc);
 		textWindow = new JTextPane(doc);
 
-	    // Create and add the main document style
-	    Style defaultStyle = sc.getStyle(StyleContext.DEFAULT_STYLE);
-	    final Style mainStyle = sc.addStyle("MainStyle", defaultStyle);
-	    StyleConstants.setLeftIndent(mainStyle, 16);
-	    StyleConstants.setRightIndent(mainStyle, 16);
-	    StyleConstants.setFirstLineIndent(mainStyle, 16);
-	    StyleConstants.setFontFamily(mainStyle, "Serif");
-	    StyleConstants.setFontSize(mainStyle, 12);
-	    
-	    Font font = new Font("Monospaced", Font.PLAIN, 14);
-        textWindow.setFont(font);
-	    
+		Style defaultStyle = sc.getStyle(StyleContext.DEFAULT_STYLE);
+		final Style mainStyle = sc.addStyle("MainStyle", defaultStyle);
+		StyleConstants.setLeftIndent(mainStyle, 16);
+		StyleConstants.setRightIndent(mainStyle, 16);
+		StyleConstants.setFirstLineIndent(mainStyle, 16);
+		StyleConstants.setFontFamily(mainStyle, "Serif");
+		StyleConstants.setFontSize(mainStyle, 12);
+
+		Font font = new Font("Monospaced", Font.PLAIN, 14);
+		textWindow.setFont(font);
+
 		textWindow.setEditable(false);
 
 		textScrollPane = new JScrollPane(textWindow);
 		textScrollPane.setPreferredSize(new Dimension(500, 450));
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		this.add(textScrollPane);
-	
-		// Add mouse listener to the text window to show predicted values when clicking on predicted statement
-        textWindow.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                int caretPos = textWindow.getCaretPosition();
-                for (PredictedStatement ps : predictedStatements) {
-                    if (caretPos >= ps.getStart() && caretPos < ps.getStop()) {
-                        showAllPredictedValues(ps);
-                        break;
-                    }
-                }
-            }
-        });
 
-		// Global listener to hide the dialog if clicked anywhere else
-		Toolkit.getDefaultToolkit().addAWTEventListener(event -> {
-			if (infoDialog != null && infoDialog.isVisible() && event instanceof MouseEvent) {
-				MouseEvent me = (MouseEvent) event;
-				if (me.getID() == MouseEvent.MOUSE_PRESSED) {
-					Component c = SwingUtilities.getDeepestComponentAt(infoDialog, me.getX(), me.getY());
-					if (c == null) {
-						hidePredictionInfo();
+		textWindow.addMouseListener(new MouseAdapter() {
+			public void mouseClicked(MouseEvent e) {
+				int caretPos = textWindow.getCaretPosition();
+				for (PredictedStatement ps : predictedStatements) {
+					if (caretPos >= ps.getStart() && caretPos < ps.getStop()) {
+						showPredictionPopupForStatement(ps);
+						break;
 					}
 				}
 			}
-		}, AWTEvent.MOUSE_EVENT_MASK);
+		});
 	}
 
-	private void hidePredictionInfo() {
-		if (infoDialog != null) {
-			infoDialog.setVisible(false);
-			infoDialog.dispose();
-			infoDialog = null;
-		}
-	}
-
-	/**
-	 * Return the text pane component.
-	 * 
-	 * @return The text pane in which the document text is displayed.
-	 */
 	JTextPane getTextWindow() {
 		return textWindow;
 	}
 
-	/**
-	 * Return the text scroll pane.
-	 * 
-	 * @return The text scroll pane that holds the text pane.
-	 */
 	JScrollPane getTextScrollPane() {
 		return textScrollPane;
 	}
-	
-	/**
-	 * Get the current vertical scroll location. This can be used to restore the
-	 * scroll location after reloading the document data from the database.
-	 * 
-	 * @return  An integer giving the vertical scroll position.
-	 */
+
 	int getVerticalScrollLocation() {
-		return (int) textScrollPane.getViewport().getViewPosition().getY(); // get the scroll position to restore it later
+		return (int) textScrollPane.getViewport().getViewPosition().getY();
 	}
 
-	/**
-	 * Set the vertical scroll location. This can be used to restore the scroll
-	 * location after reloading the document data from the database.
-	 * 
-	 * @param verticalScrollLocation  The vertical scroll location.
-	 */
 	void setVerticalScrollLocation(int verticalScrollLocation) {
-		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
-				textScrollPane.getViewport().setViewPosition(new Point(0, verticalScrollLocation)); // scroll to previously saved position
-			}
-		});
+		SwingUtilities.invokeLater(() -> textScrollPane.getViewport().setViewPosition(new Point(0, verticalScrollLocation)));
 	}
 
 	public void setAnnotationMethod(String method) {
@@ -161,39 +85,25 @@ public class TextPanel extends JPanel {
 	}
 
 	public void setPredictedStatements(ArrayList<PredictedStatement> preds) {
-        this.predictedStatements = preds;
-    }
+		this.predictedStatements = preds;
+	}
 
 	public boolean hasPredictedHighlights() {
-		if (predictedStatements == null) return false;
-		for (PredictedStatement ps : predictedStatements) {
-			if (ps.getConceptProb() > 0.7) {
-				return true;
-			}
-		}
-		return false;
-    }
+		return (predictedStatements != null && !predictedStatements.isEmpty());
+	}
 
-	// highlights based on the selected annotation method
-	// currently only Naive Bayes is implemented, but can be extended to other methods
 	public void suggestHighlights() {
-		if (annotationMethod == null || annotationMethod.equals("Select Method")) {
+		if (annotationMethod == null || annotationMethod.equals("Select Automatic Annotation Method")) {
 			clearPredictedStatements();
 			return;
 		}
 		if ("Naive Bayes".equals(annotationMethod)) {
 			highlightUsingNaiveBayes();
 		}
-		// else if ("Other Method".equals(annotationMethod)) {
-		//     highlightUsingOtherMethod();
-		// }
 	}
 
-	// Highlights the text using Naive Bayes classification.
-	// It trains classifiers for each variable group and predicts values for sentences in the text.
-	// The predicted values are stored in PredictedStatement objects, which are then used to highlight the text.
 	private void highlightUsingNaiveBayes() {
-		var classifiers = text.NaiveBayesClassifier.trainByVariableGroups();
+		var classifiers = NaiveBayesClassifier.trainByVariableGroups();
 		if (classifiers != null && !classifiers.isEmpty()) {
 			String text = textWindow.getText();
 			ArrayList<PredictedStatement> preds = new ArrayList<>();
@@ -203,37 +113,22 @@ public class TextPanel extends JPanel {
 				int start = text.indexOf(sentence, pos);
 				int stop = start + sentence.length();
 				Map<String, String> predictedValues = new HashMap<>();
-				Double conceptProb = null;
+				Map<String, Double> predictedProbs = new HashMap<>();
 				for (String var : classifiers.keySet()) {
 					NaiveBayesClassifier.TrainedClassifier tc = classifiers.get(var);
 					double[] x = NaiveBayesClassifier.vectorizeTfIdf(sentence, tc.vocab, tc.vocabDf, sentences.length);
 					int predIdx = tc.model.predict(x);
 					String predictedVar = NaiveBayesClassifier.inverseLabelMap(tc.labelMap, predIdx);
 					predictedValues.put(var, predictedVar);
-					if (var.equals("concept")) {
-						// Compute concept probability
-						double[] classScores = new double[tc.labelMap.size()];
-						for (int c = 0; c < classScores.length; c++) {
-							double score = tc.model.logPrior[c];
-							for (int j = 0; j < x.length; j++) {
-								score += x[j] * tc.model.logLikelihood[c][j];
-							}
-							classScores[c] = score;
-						}
-						double maxScore = Arrays.stream(classScores).max().orElse(0.0);
-						double sumExp = 0.0;
-						for (int c = 0; c < classScores.length; c++) {
-							classScores[c] = Math.exp(classScores[c] - maxScore);
-							sumExp += classScores[c];
-						}
-						conceptProb = classScores[predIdx] / sumExp;
-					}
+
+					double[] probs = tc.model.predictProba(x);
+					predictedProbs.put(var, probs[predIdx]);
 				}
-				if ("nonstatement".equals(predictedValues.get("concept"))) {
-					pos = stop;
-					continue;
+				// Only highlight if concept is not "nonstatement"
+				String conceptVal = predictedValues.get("concept");
+				if (conceptVal != null && !"nonstatement".equalsIgnoreCase(conceptVal)) {
+					preds.add(new PredictedStatement(start, stop, predictedValues, predictedProbs));
 				}
-				preds.add(new PredictedStatement(start, stop, predictedValues, conceptProb));
 				pos = stop;
 			}
 			setPredictedStatements(preds);
@@ -242,14 +137,10 @@ public class TextPanel extends JPanel {
 	}
 
 	public static String[] smartSentenceSplit(String text) {
-		// Abbreviations to protect (add more as needed)
 		String abbrevPattern = "(Mr|Ms|Mrs|Dr|Prof|hon|Sr|Jr)\\.";
-		// Replace periods after abbreviations with a placeholder
 		String safeText = text.replaceAll(abbrevPattern, "$1<ABBR_DOT>");
-		// Split on punctuation followed by whitespace and a capital letter (likely new sentence)
 		String pattern = "(?<=[.!?])\\s+(?=[A-Z])";
 		String[] sentences = safeText.split(pattern);
-		// Restore periods in abbreviations
 		for (int i = 0; i < sentences.length; i++) {
 			sentences[i] = sentences[i].replaceAll("<ABBR_DOT>", ".");
 		}
@@ -261,54 +152,231 @@ public class TextPanel extends JPanel {
 		paintStatements();
 	}
 
-	private void showAllPredictedValues(PredictedStatement ps) {
-    StringBuilder sb = new StringBuilder();
-    for (Map.Entry<String, String> entry : ps.getPredictedValues().entrySet()) {
-        sb.append("Predicted ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
-    }
-    if (ps.getConceptProb() != null) {
-        sb.append(String.format("Concept probability: %.4f\n", ps.getConceptProb()));
-    }
+	private void showPredictionPopupForStatement(PredictedStatement ps) {
+		ArrayList<model.StatementType> types = dna.Dna.sql.getStatementTypes();
+		model.StatementType stype = types.size() > 0 ? types.get(0) : null;
+		if (stype == null) return;
 
-    // Create a non-modal, undecorated dialog that closes on focus lost
-    JDialog popup = new JDialog(SwingUtilities.getWindowAncestor(this));
-    popup.setUndecorated(true);
-    popup.setModal(false);
+		java.awt.Frame frame = (java.awt.Frame) SwingUtilities.getWindowAncestor(this);
+		JDialog popup = new JDialog(frame, "Predicted annotation", true);
+		popup.setLayout(new java.awt.BorderLayout(10, 10));
 
-    JTextArea textArea = new JTextArea(sb.toString());
-    textArea.setEditable(false);
-    textArea.setOpaque(true);
-    textArea.setBackground(new Color(255,255,220));
-    textArea.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
+		JPanel contentPanel = new JPanel();
+		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+		contentPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-    popup.add(textArea);
-    popup.pack();
+		Map<String, Object> editors = new HashMap<>();
 
-    // Position: center over this panel, or use mouse location
-    Point mouse = MouseInfo.getPointerInfo().getLocation();
-    popup.setLocation(mouse);
+		for (model.Value v : stype.getVariables()) {
+			String var = v.getKey();
+			String dataType = v.getDataType();
+			String predValue = ps.getPredictedValues().get(var);
+			JPanel row = new JPanel(new BorderLayout());
+			JLabel label = new JLabel(var + ":");
 
-    // Dispose on focus lost
-    popup.addWindowFocusListener(new java.awt.event.WindowAdapter() {
-        public void windowLostFocus(java.awt.event.WindowEvent e) {
-            popup.dispose();
-        }
-    });
+			JComponent editor = null;
 
-    popup.setVisible(true);
-    popup.requestFocus();
-}
+			if (dataType.equals("boolean")) {
+				int entry = 0;
+				try {
+					if (predValue != null) {
+						if (predValue.equalsIgnoreCase("true") || predValue.equalsIgnoreCase("yes")) {
+							entry = 1;
+						} else if (predValue.equalsIgnoreCase("false") || predValue.equalsIgnoreCase("no")) {
+							entry = 0;
+						} else {
+							entry = Integer.parseInt(predValue);
+						}
+					}
+				} catch (Exception ex) {
+					entry = 0;
+				}
+				boolean val = (entry != 0);
+				BooleanButtonPanel buttons = new BooleanButtonPanel();
+				buttons.setYes(val);
+				buttons.setEnabled(true);
+				editor = buttons;
+				editors.put(var, buttons);
+			} else if ("integer".equals(dataType)) {
+				JTextField field = new JTextField(predValue != null ? predValue : "");
+				editor = field;
+				editors.put(var, field);
+			} else if ("short text".equals(dataType)) {
+				ArrayList<Integer> variableIdList = new ArrayList<>();
+				variableIdList.add(v.getVariableId());
+				ArrayList<ArrayList<model.Entity>> allEntities = dna.Dna.sql.getEntities(variableIdList, true);
+				if (allEntities != null && !allEntities.isEmpty() && !allEntities.get(0).isEmpty()) {
+					JComboBox<String> combo = new JComboBox<>();
+					for (model.Entity ent : allEntities.get(0)) {
+						combo.addItem(ent.getValue());
+					}
+					combo.setEditable(true);
+					if (predValue != null) combo.setSelectedItem(predValue);
+					editor = combo;
+					editors.put(var, combo);
+				} else {
+					JTextField field = new JTextField(predValue != null ? predValue : "");
+					editor = field;
+					editors.put(var, field);
+				}
+			} else { // "long text" or anything else
+				JTextField field = new JTextField(predValue != null ? predValue : "");
+				editor = field;
+				editors.put(var, field);
+			}
+			row.add(label, BorderLayout.WEST);
+			row.add(editor, BorderLayout.CENTER);
+			contentPanel.add(row);
+		}
+		popup.add(contentPanel, java.awt.BorderLayout.CENTER);
+
+		JPanel buttonPanel = new JPanel();
+		JButton acceptButton = new JButton("Accept");
+		JButton rejectButton = new JButton("Reject");
+		buttonPanel.add(acceptButton);
+		buttonPanel.add(rejectButton);
+		popup.add(buttonPanel, java.awt.BorderLayout.SOUTH);
+
+		acceptButton.addActionListener(e -> {
+			ArrayList<model.Value> filledValues = new ArrayList<>();
+			for (model.Value v : stype.getVariables()) {
+				String var = v.getKey();
+				String dataType = v.getDataType();
+				Object valueObj = null;
+				if (dataType.equals("boolean")) {
+					BooleanButtonPanel buttons = (BooleanButtonPanel) editors.get(var);
+					int val = buttons.isYes() ? 1 : 0;
+					valueObj = val;
+				} else if ("integer".equals(dataType)) {
+					JTextField field = (JTextField) editors.get(var);
+					String val = field.getText();
+					try {
+						valueObj = Integer.valueOf(val);
+					} catch (Exception ex) {
+						valueObj = 0;
+					}
+				} else if ("short text".equals(dataType)) {
+					String val;
+					Object ed = editors.get(var);
+					if (ed instanceof JComboBox) {
+						Object selected = ((JComboBox<?>) ed).getSelectedItem();
+						val = selected != null ? selected.toString() : "";
+					} else {
+						val = ((JTextField) ed).getText();
+					}
+					model.Entity ent = null;
+					ArrayList<Integer> variableIdList = new ArrayList<>();
+					variableIdList.add(v.getVariableId());
+					ArrayList<ArrayList<model.Entity>> allEntities = dna.Dna.sql.getEntities(variableIdList, true);
+					if (allEntities != null && !allEntities.isEmpty() && !allEntities.get(0).isEmpty()) {
+						for (model.Entity candidate : allEntities.get(0)) {
+							if (candidate.getValue().equals(val)) {
+								ent = candidate;
+								break;
+							}
+						}
+					}
+					if (ent == null) ent = new model.Entity(val);
+					valueObj = ent;
+				} else if ("long text".equals(dataType)) {
+					JTextField field = (JTextField) editors.get(var);
+					valueObj = field.getText();
+				} else {
+					JTextField field = (JTextField) editors.get(var);
+					valueObj = field.getText();
+				}
+				filledValues.add(new model.Value(v.getVariableId(), var, dataType, valueObj));
+			}
+			model.Statement s = new model.Statement(
+				ps.getStart(),
+				ps.getStop(),
+				stype.getId(),
+				dna.Dna.sql.getActiveCoder().getId(),
+				filledValues
+			);
+			s.setDocumentId(this.documentId);
+			s.setText(textWindow.getText().substring(ps.getStart(), ps.getStop()));
+			int insertedId = dna.Dna.sql.addStatement(s, this.documentId);
+			if (insertedId > 0) {
+				predictedStatements.remove(ps);
+				paintStatements();
+			}
+			popup.dispose();
+		});
+
+		rejectButton.addActionListener(e -> {
+			predictedStatements.remove(ps);
+			paintStatements();
+			popup.dispose();
+		});
+
+		popup.pack();
+		popup.setLocationRelativeTo(this);
+		popup.setVisible(true);
+	}
+
+	private void insertPredictedStatementAsCoded(PredictedStatement ps) {
+		ArrayList<model.StatementType> types = Dna.sql.getStatementTypes();
+		model.StatementType stype = types.size() > 0 ? types.get(0) : null;
+		if (stype == null) return;
+
+		ArrayList<model.Value> filledValues = new ArrayList<>();
+		for (model.Value v : stype.getVariables()) {
+			String key = v.getKey();
+			String dataType = v.getDataType();
+			String predicted = ps.getPredictedValues().get(key);
+			Object valueObj = null;
+			if ("short text".equals(dataType)) {
+				model.Entity ent = null;
+				if (predicted != null) {
+					ArrayList<Integer> variableIdList = new ArrayList<>();
+					variableIdList.add(v.getVariableId());
+					ArrayList<ArrayList<model.Entity>> allEntities = Dna.sql.getEntities(variableIdList, true);
+					if (allEntities != null && !allEntities.isEmpty() && !allEntities.get(0).isEmpty()) {
+						for (model.Entity candidate : allEntities.get(0)) {
+							if (candidate.getValue().equals(predicted)) {
+								ent = candidate;
+								break;
+							}
+						}
+					}
+					if (ent == null) ent = new model.Entity(predicted);
+				}
+				valueObj = ent;
+			} else if ("integer".equals(dataType)) {
+				if (predicted != null && !predicted.isEmpty()) {
+					try {
+						valueObj = Integer.valueOf(predicted);
+					} catch (NumberFormatException ex) {
+						valueObj = 0;
+					}
+				} else {
+					valueObj = 0;
+				}
+			} else if ("boolean".equals(dataType)) {
+				if (predicted != null) {
+					valueObj = Boolean.valueOf(predicted);
+				} else {
+					valueObj = false;
+				}
+			} else if ("long text".equals(dataType)) {
+				valueObj = (predicted != null) ? predicted : "";
+			} else {
+				valueObj = predicted;
+			}
+			filledValues.add(new model.Value(v.getVariableId(), key, dataType, valueObj));
+		}
+		model.Statement s = new model.Statement(ps.getStart(), ps.getStop(), stype.getId(), Dna.sql.getActiveCoder().getId(), filledValues);
+		s.setDocumentId(this.documentId);
+		s.setText(textWindow.getText().substring(ps.getStart(), ps.getStop()));
+		int insertedId = Dna.sql.addStatement(s, this.documentId);
+		if (insertedId > 0) {
+			predictedStatements.remove(ps);
+			paintStatements();
+		}
+	}
 
 
-
-
-	/**
-	 * Set the contents of the text panel, including the document ID and text,
-	 * and paint the statements in the text, then scroll to the top of the text.
-	 * 
-	 * @param documentId  ID of the document to display.
-	 * @param text        Text of the document to display.
-	 */
 	void setContents(int documentId, String text) {
 		this.textWindow.setText(text);
 		this.documentId = documentId;
@@ -316,13 +384,8 @@ public class TextPanel extends JPanel {
 		textWindow.setCaretPosition(0);
 	}
 
-	
-	/**
-	 * Highlight statements and regex in the text by adding color.
-	 */
 	void paintStatements() {
 		if (documentId > -1) {
-			// Remove all initial foreground color styles
 			int initialStart = 0;
 			int initialEnd = textWindow.getText().length();
 			Style blackStyle = sc.addStyle("ConstantWidth", null);
@@ -330,7 +393,6 @@ public class TextPanel extends JPanel {
 			StyleConstants.setBackground(blackStyle, Color.white);
 			doc.setCharacterAttributes(initialStart, initialEnd - initialStart, blackStyle, false);
 
-			// color statements (coded)
 			ArrayList<Statement> statements = Dna.sql.getShallowStatements(documentId);
 			ArrayList<int[]> codedRanges = new ArrayList<>();
 			int i, start;
@@ -340,7 +402,7 @@ public class TextPanel extends JPanel {
 				if (Dna.sql.getActiveCoder() != null &&
 						(statements.get(i).getCoderId() == Dna.sql.getActiveCoder().getId() || Dna.sql.getActiveCoder().isPermissionViewOthersStatements()) &&
 						(statements.get(i).getCoderId() == Dna.sql.getActiveCoder().getId() || Dna.sql.getActiveCoder().getCoderRelations().get(statements.get(i).getCoderId()).isViewStatements())) {
-					if (Dna.sql.getActiveCoder().isColorByCoder() == true) {
+					if (Dna.sql.getActiveCoder().isColorByCoder()) {
 						StyleConstants.setBackground(bgStyle, statements.get(i).getCoderColor().toAWTColor());
 					} else {
 						StyleConstants.setBackground(bgStyle, statements.get(i).getStatementTypeColor().toAWTColor());
@@ -350,7 +412,6 @@ public class TextPanel extends JPanel {
 				codedRanges.add(new int[]{start, statements.get(i).getStop()});
 			}
 
-			// paint predicted highlights (do not overlap coded statements)
 			for (PredictedStatement ps : predictedStatements) {
 				int predStart = ps.getStart();
 				int predStop = ps.getStop();
@@ -366,18 +427,20 @@ public class TextPanel extends JPanel {
 				double minAlpha = 25;
 				double maxAlpha = 220;
 				double curve = 4.0;
-				double certainty = ps.getConceptProb();
+				Double certainty = 1.0;
+				if (ps.getPredictedProbs() != null && ps.getPredictedProbs().containsKey("concept")) {
+					certainty = ps.getPredictedProbs().get("concept");
+				}
 				int alpha = (int) (minAlpha + (maxAlpha - minAlpha) * Math.pow(certainty, curve));
-				Color highlightColor = new Color(100, 149, 237, alpha); // yellow with variable opacity
-                Style predStyle = sc.addStyle("PredictedHighlight", null);
-                StyleConstants.setBackground(predStyle, highlightColor);
-                int predLength = predStop - predStart;
-                if (predStart >= 0 && predStart + predLength <= textWindow.getText().length()) {
-                    doc.setCharacterAttributes(predStart, predLength, predStyle, false);
-                }
-            }
+				Color highlightColor = new Color(100, 149, 237, alpha);
+				Style predStyle = sc.addStyle("PredictedHighlight", null);
+				StyleConstants.setBackground(predStyle, highlightColor);
+				int predLength = predStop - predStart;
+				if (predStart >= 0 && predStart + predLength <= textWindow.getText().length()) {
+					doc.setCharacterAttributes(predStart, predLength, predStyle, false);
+				}
+			}
 
-			// color regex
 			ArrayList<Regex> regex = Dna.sql.getRegexes();
 			for (i = 0; i < regex.size(); i++) {
 				String label = regex.get(i).getLabel();
@@ -393,20 +456,16 @@ public class TextPanel extends JPanel {
 			}
 		}
 	}
-	
-	/**
-	 * Repaint statements and update font size after a new coder has been
-	 * selected.
-	 */
+
 	void adjustToChangedCoder() {
 		if (Dna.sql.getConnectionProfile() == null) {
-		    Font font = new Font("Monospaced", Font.PLAIN, 14);
-	        textWindow.setFont(font);
+			Font font = new Font("Monospaced", Font.PLAIN, 14);
+			textWindow.setFont(font);
 		} else {
 			try {
 				Font font = new Font("Monospaced", Font.PLAIN, Dna.sql.getActiveCoder().getFontSize());
-		        textWindow.setFont(font);
-		        paintStatements();
+				textWindow.setFont(font);
+				paintStatements();
 			} catch (NullPointerException e) {
 				LogEvent l = new LogEvent(Logger.ERROR,
 						"Statements could not be painted in text.",
@@ -416,23 +475,20 @@ public class TextPanel extends JPanel {
 			}
 		}
 	}
-	// Represents a predicted statement with its start and stop positions, predicted values, and concept probability.
-	// This class is used to store the results of Naive Bayes classification for each sentence in the text.
-	class PredictedStatement {
+
+	public class PredictedStatement {
 		private int start, stop;
 		private Map<String, String> predictedValues;
-		private Double conceptProb; // Nullable: only present for concept, or set to null for others
-
-		public PredictedStatement(int start, int stop, Map<String, String> predictedValues, Double conceptProb) {
+		private Map<String, Double> predictedProbs;
+		public PredictedStatement(int start, int stop, Map<String, String> predictedValues, Map<String, Double> predictedProbs) {
 			this.start = start;
 			this.stop = stop;
 			this.predictedValues = predictedValues;
-			this.conceptProb = conceptProb;
+			this.predictedProbs = predictedProbs;
 		}
 		public int getStart() { return start; }
 		public int getStop() { return stop; }
 		public Map<String, String> getPredictedValues() { return predictedValues; }
-		public Double getConceptProb() { return conceptProb; }
+		public Map<String, Double> getPredictedProbs() { return predictedProbs; }
 	}
 }
-

@@ -437,4 +437,8 @@ public class DocumentTablePanel extends JPanel {
 	public interface DocumentTableListener {
 		void documentSelected(int[] documentIds);
 	}
+
+	public DocumentTableModel getDocumentTableModel() {
+		return this.documentTableModel;
+	}
 }
