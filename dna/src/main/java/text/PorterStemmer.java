@@ -1,3 +1,7 @@
+/* code from:
+ * Porter, Martin. "The Porter Stemming Algorithm." 1980-2001. https://tartarus.org/martin/PorterStemmer/
+ */
+
 package text;
 
 public class PorterStemmer {

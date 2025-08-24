@@ -51,6 +51,7 @@ public class TextPanel extends JPanel {
 		textScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 		this.add(textScrollPane);
 
+		/* Mouse Listener for Text Pane that shows prediction popup */
 		textWindow.addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
 				int caretPos = textWindow.getCaretPosition();
@@ -102,6 +103,9 @@ public class TextPanel extends JPanel {
 		}
 	}
 
+	/**
+	 * Highlights text using the Naive Bayes classifier.
+	 */
 	private void highlightUsingNaiveBayes() {
 		var classifiers = NaiveBayesClassifier.trainByVariableGroups();
 		if (classifiers != null && !classifiers.isEmpty()) {
@@ -137,6 +141,10 @@ public class TextPanel extends JPanel {
 		}
 	}
 
+	/*Insert future highlightUsingClassifier method here */
+
+	/*splits text into sentences ignoring abbreviations*/
+
 	public static String[] smartSentenceSplit(String text) {
 		String abbrevPattern = "(Mr|Ms|Mrs|Dr|Prof|hon|Sr|Jr)\\.";
 		String safeText = text.replaceAll(abbrevPattern, "$1<ABBR_DOT>");
@@ -148,11 +156,17 @@ public class TextPanel extends JPanel {
 		return sentences;
 	}
 
+	/* Clears the predicted statements */
 	public void clearPredictedStatements() {
 		setPredictedStatements(new ArrayList<>());
 		paintStatements();
 	}
 
+	/**
+	 * Shows a prediction popup for a specific statement.
+	 *
+	 * @param ps The predicted statement.
+	 */
 	private void showPredictionPopupForStatement(PredictedStatement ps) {
 		ArrayList<model.StatementType> types = dna.Dna.sql.getStatementTypes();
 		model.StatementType stype = null;
@@ -247,7 +261,7 @@ public class TextPanel extends JPanel {
 			row.add(label, BorderLayout.WEST);
 			row.add(editor, BorderLayout.CENTER);
 
-			// Optionally, show probability as a label
+			//show probability as a label
 			if (predProb != null) {
 				JLabel probLabel = new JLabel(String.format("  (p=%.2f)", predProb));
 				row.add(probLabel, BorderLayout.EAST);
@@ -346,6 +360,11 @@ public class TextPanel extends JPanel {
 		popup.setVisible(true);
 	}
 
+	/**
+	 * Inserts a predicted statement as a coded statement.
+	 *
+	 * @param ps The predicted statement.
+	 */
 	private void insertPredictedStatementAsCoded(PredictedStatement ps) {
 		ArrayList<model.StatementType> types = dna.Dna.sql.getStatementTypes();
 		model.StatementType stype = null;
@@ -514,6 +533,9 @@ public class TextPanel extends JPanel {
 		}
 	}
 
+	/**
+	 * Represents a predicted statement with its associated metadata.
+	 */
 	public class PredictedStatement {
 		private int start, stop, statementTypeId;
 		private Map<String, String> predictedValues;

@@ -121,6 +121,7 @@ public class NaiveBayesClassifier {
             ex.printStackTrace();
         }
 
+        // For each document, find uncoded sentences to add as "nonstatement"
         Random rand = new Random();
         for (int docId : allDocumentIds) {
             String documentText = dna.Dna.sql.getDocumentText(docId);
